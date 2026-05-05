@@ -240,12 +240,79 @@
   ::-webkit-scrollbar{width:5px;height:5px;}
   ::-webkit-scrollbar-track{background:transparent;}
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+  /* ── 모바일/태블릿 반응형 ── */
+  .menu-btn{display:none;background:none;border:none;color:var(--text);font-size:22px;cursor:pointer;padding:0 6px;line-height:1;}
+  .hbtn-icon{display:none;}
+  .sb-overlay{display:none;position:fixed;inset:53px 0 0 0;background:rgba(0,0,0,.5);z-index:40;}
+  .sb-overlay.open{display:block;}
+  .sb-mobile-only{display:none;}
+
+  @media (max-width: 900px) {
+    header{padding:0 10px;gap:8px;}
+    header h1{font-size:13px;}
+    .menu-btn{display:block;}
+    .header-tabs{margin-left:0;flex:1;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    .header-tab{padding:6px 10px;font-size:12px;flex-shrink:0;}
+    .header-btns{gap:5px;flex-shrink:0;}
+    .header-btns .header-tab{display:none;} /* 관리자용 보드 탭은 사이드바 메뉴로 이동 */
+    .hbtn{padding:6px 9px;font-size:11px;}
+    .hbtn-text{display:none;}
+    .hbtn-icon{display:inline;}
+
+    .layout{grid-template-columns:1fr;}
+    .sidebar{position:fixed;left:0;top:53px;bottom:0;width:240px;z-index:50;transform:translateX(-100%);transition:transform .2s;}
+    .sidebar.open{transform:translateX(0);}
+
+    .main{padding:12px 12px;}
+    .summary-bar{gap:6px;}
+    .scard{min-width:calc(50% - 4px);padding:8px 12px;}
+    .sval{font-size:18px;}
+
+    .works-grid{grid-template-columns:1fr;}
+    .filter-bar{overflow-x:auto;flex-wrap:nowrap;}
+    .fpill{flex-shrink:0;}
+
+    .modal{width:100%;max-width:100vw;max-height:100vh;border-radius:0;}
+    .modal-body{padding:14px 16px;}
+
+    /* 컨펌/각색 카드 — 모바일에서 한 줄로 못 들어가면 자연스럽게 줄바꿈 */
+    .cf-card{grid-template-columns:1fr auto;gap:8px 12px;}
+    .cf-card .cf-stage,.cf-card .cf-done-btn{grid-column:1/-1;justify-self:start;}
+    .cf-card .cf-done-btn{justify-self:stretch;text-align:center;}
+
+    /* 회차 테이블 — 모바일에서 가로 스크롤 */
+    .ep-table{font-size:11px;}
+    .ep-table th,.ep-table td{padding:5px 6px;}
+
+    /* 관리자 보드 표 */
+    .ab-tw{overflow-x:auto;}
+    .ab-tw-row{min-width:520px;}
+    .ab-stat-grid{grid-template-columns:repeat(2,1fr);}
+
+    /* 캘린더 픽커 */
+    .cal-day{font-size:11px;padding:9px 0;width:auto;height:auto;}
+
+    /* 일정 셀 — 모바일에서 줄바꿈 허용해서 끊기지 않게 */
+    .ep-sched{white-space:normal;}
+
+    .sb-mobile-only{display:block;}
+  }
+
+  @media (max-width: 480px) {
+    header h1{display:none;}
+    .scard{min-width:100%;}
+    .ab-stat-grid{grid-template-columns:repeat(2,1fr);gap:10px;}
+    .ab-stat-val{font-size:22px;}
+    .ab-prog-pct{font-size:28px;}
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 </head>
 <body>
 
 <header>
+  <button class="menu-btn" onclick="toggleSidebar()" aria-label="메뉴">☰</button>
   <h1>🎬 <span>애니메이션 제작</span> 대시보드 — 2026</h1>
   <div class="header-tabs">
     <div class="header-tab active" data-tab="works"    onclick="switchTab('works')">작품별 현황</div>
@@ -253,10 +320,12 @@
   </div>
   <div class="header-btns">
     <div class="header-tab" data-tab="admin" onclick="switchTab('admin')">관리자용 보드</div>
-    <button class="hbtn hbtn-secondary" onclick="openAddWorker()">+ 작업자 추가</button>
-    <button class="hbtn hbtn-primary"   onclick="openAddWork()">+ 작품 추가</button>
+    <button class="hbtn hbtn-secondary" onclick="openAddWorker()"><span class="hbtn-text">+ 작업자 추가</span><span class="hbtn-icon">👤+</span></button>
+    <button class="hbtn hbtn-primary"   onclick="openAddWork()"><span class="hbtn-text">+ 작품 추가</span><span class="hbtn-icon">＋</span></button>
   </div>
 </header>
+
+<div class="sb-overlay" onclick="toggleSidebar()"></div>
 
 <div class="layout">
   <!-- Sidebar -->
@@ -269,6 +338,12 @@
         <div class="wbadge" id="badge-all">–</div>
       </div>
       <div id="worker-cards"></div>
+    </div>
+    <div class="sb-section sb-mobile-only">
+      <div class="sb-label">메뉴</div>
+      <div class="wcard" onclick="switchTab('admin');closeSidebarMobile()">
+        <div><div class="wname">📊 관리자용 보드</div></div>
+      </div>
     </div>
     <div class="sb-section">
       <div class="sb-label">회차 단계</div>
@@ -1293,12 +1368,25 @@ function setFilter(val) {
 
 function filterWorker(w) {
   state.currentWorker = w;
+  closeSidebarMobile();
   // 관리자용 보드는 전체 통계 페이지라 작업자 필터와 별개 — 작업자를 고르면 작품별 현황으로 이동
   if (state.currentTab === 'admin') {
     switchTab('works');
     return;
   }
   render();
+}
+
+// 모바일 사이드바 토글
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.querySelector('.sb-overlay').classList.toggle('open');
+}
+function closeSidebarMobile() {
+  if (window.matchMedia('(max-width: 900px)').matches) {
+    document.querySelector('.sidebar').classList.remove('open');
+    document.querySelector('.sb-overlay').classList.remove('open');
+  }
 }
 
 // ── 작품 추가/수정 ────────────────────────────────────────────

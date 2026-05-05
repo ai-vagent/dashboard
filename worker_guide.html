@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>작업자용 대시보드 사용법</title>
+<style>
+  :root{
+    --bg:#0f1117; --surface:#1a1d27; --surface2:#22253a; --border:#2e3150;
+    --accent:#6c63ff; --green:#43d98a; --yellow:#ffd166; --orange:#ff9f43;
+    --cyan:#7ec8e3; --pink:#ff9fb5; --purple:#c084fc;
+    --text:#e8eaf6; --text2:#8b90b8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#000;font-family:'Segoe UI','Apple SD Gothic Neo',sans-serif;color:var(--text);overflow:hidden;}
+  .deck{width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;}
+
+  .slide{
+    aspect-ratio:16/9;
+    width:min(100vw, calc(100vh * 16/9));
+    height:min(100vh, calc(100vw * 9/16));
+    background:var(--bg);
+    padding:60px 80px;
+    box-sizing:border-box;
+    display:none;
+    flex-direction:column;
+    position:relative;
+    overflow:hidden;
+  }
+  .slide.active{display:flex;}
+
+  .slide h1{font-size:40px;font-weight:800;color:var(--accent);margin-bottom:14px;}
+  .slide h2{font-size:32px;font-weight:700;margin-bottom:18px;color:var(--text);}
+  .slide h3{font-size:18px;font-weight:700;color:var(--accent);margin-bottom:8px;}
+  .slide p{font-size:18px;line-height:1.6;color:var(--text);}
+  .slide ul{font-size:17px;line-height:1.8;padding-left:24px;color:var(--text);}
+  .slide ul li{margin:4px 0;}
+  .slide ul li::marker{color:var(--accent);}
+  .slide .sub{font-size:15px;color:var(--text2);margin-top:6px;}
+
+  .cover{align-items:center;justify-content:center;text-align:center;background:linear-gradient(135deg,#1a1d27 0%,#0f1117 100%);}
+  .cover .icon{font-size:80px;margin-bottom:20px;}
+  .cover h1{font-size:60px;color:var(--text);margin-bottom:12px;}
+  .cover .sub-title{font-size:24px;color:var(--accent);font-weight:600;}
+
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:18px;}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:18px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 22px;}
+  .card.accent{border-left:4px solid var(--accent);}
+  .card.orange{border-left:4px solid var(--orange);}
+  .card.cyan{border-left:4px solid var(--cyan);}
+  .card.green{border-left:4px solid var(--green);}
+
+  .step{display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;}
+  .step .step-n{flex-shrink:0;width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:14px;}
+  .step .step-c{flex:1;font-size:16px;line-height:1.5;}
+
+  .pill{display:inline-block;padding:3px 12px;border-radius:14px;font-size:13px;font-weight:600;}
+  .pill-orange{background:#3a2600;color:var(--orange);border:1px solid #5a3c00;}
+  .pill-cyan{background:#1a3a5c;color:var(--cyan);border:1px solid #2e5a78;}
+  .pill-green{background:#1a3a2e;color:var(--green);}
+  .pill-yellow{background:#3a2e1a;color:var(--yellow);}
+  .pill-pink{background:#3a1a2e;color:var(--pink);}
+  .pill-purple{background:#2e1a3a;color:var(--purple);}
+  .pill-gray{background:var(--surface2);color:var(--text2);}
+  .pill-adapt{background:#2a2e3a;color:#a0a0c0;}
+
+  .key{display:inline-block;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;font-family:monospace;font-size:13px;}
+
+  .stages-row{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:14px;}
+  .stage-cell{text-align:center;padding:12px 6px;border-radius:8px;border:1px solid var(--border);font-size:12px;font-weight:600;}
+  .stage-cell .num{display:block;font-size:11px;color:var(--text2);margin-bottom:3px;font-weight:500;}
+
+  .flow{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap;}
+  .flow-step{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 16px;font-size:14px;text-align:center;}
+  .flow-arrow{color:var(--text2);font-size:18px;}
+  .flow-step.confirm{border-color:var(--orange);color:var(--orange);}
+  .flow-step.next{border-color:var(--green);color:var(--green);}
+  .flow-step.cyan{border-color:var(--cyan);color:var(--cyan);}
+
+  .page-num{position:absolute;bottom:24px;right:32px;font-size:12px;color:var(--text2);}
+  .nav{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;background:rgba(26,29,39,.85);backdrop-filter:blur(8px);padding:8px 16px;border-radius:24px;border:1px solid var(--border);z-index:100;}
+  .nav button{background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;}
+  .nav button:disabled{opacity:.3;cursor:not-allowed;}
+  .nav .num{font-size:13px;color:var(--text);min-width:50px;text-align:center;}
+
+  .tip{background:#1a3a2e44;border-left:3px solid var(--green);padding:10px 14px;margin-top:14px;border-radius:6px;font-size:14px;color:var(--text);}
+  .tip b{color:var(--green);}
+  .warn{background:#3a260044;border-left:3px solid var(--orange);padding:10px 14px;margin-top:14px;border-radius:6px;font-size:14px;color:var(--text);}
+  .warn b{color:var(--orange);}
+
+  /* 모형 회차 행 */
+  .mock-table{margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  .mock-table-row{display:grid;grid-template-columns:60px 1fr 1.2fr 1fr 1.4fr;gap:12px;padding:8px 14px;border-bottom:1px solid var(--border);font-size:13px;align-items:center;}
+  .mock-table-row.head{background:var(--surface2);font-size:11px;color:var(--text2);font-weight:700;text-transform:uppercase;}
+  .mock-table-row:last-child{border-bottom:none;}
+
+  .modal-mock{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-top:14px;max-width:520px;}
+  .modal-mock-hd{font-size:14px;font-weight:700;border-bottom:1px solid var(--border);padding-bottom:8px;margin-bottom:10px;}
+  .modal-mock-row{margin-bottom:10px;}
+  .modal-mock-row .lbl{font-size:11px;color:var(--text2);font-weight:600;text-transform:uppercase;display:block;margin-bottom:5px;}
+  .stage-btns{display:flex;flex-wrap:wrap;gap:5px;}
+  .stage-btn{padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;}
+  .stage-btn.sel{border-color:var(--accent);color:var(--accent);background:rgba(108,99,255,.15);}
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+<!-- ============ 1: 표지 ============ -->
+<section class="slide active cover">
+  <div class="icon">🎬</div>
+  <h1>작업자용 대시보드 사용법</h1>
+  <div class="sub-title">애니메이션 제작 진행 관리 시스템</div>
+  <div style="margin-top:30px;font-size:16px;color:var(--text2)">
+    내 작품 진행 / 일정 관리 / 컨펌 받기
+  </div>
+  <div class="page-num">1</div>
+</section>
+
+<!-- ============ 2: 첫 화면 ============ -->
+<section class="slide">
+  <h2>첫 화면 — 본인 이름 클릭</h2>
+  <p style="color:var(--text2)">사이드바에서 자기 이름을 클릭하면 본인 담당 작품만 보입니다.</p>
+  <div class="grid-2" style="margin-top:18px">
+    <div class="card accent">
+      <h3>① 작품별 현황</h3>
+      <ul style="font-size:14px;margin-top:8px">
+        <li>각 작품별 카드 + 회차 표</li>
+        <li>회차별 단계 / 진행률 / 메모 확인 / 수정</li>
+        <li>이번 주 회차는 보라색 강조</li>
+      </ul>
+    </div>
+    <div class="card accent">
+      <h3>② 주간 타임라인</h3>
+      <ul style="font-size:14px;margin-top:8px">
+        <li>캘린더 위 회차 막대 (간트 차트)</li>
+        <li>막대 색 = 단계, 게이지 = 진행률</li>
+        <li>오늘은 보라색 세로선으로 표시</li>
+      </ul>
+    </div>
+  </div>
+  <div class="tip"><b>💡 화면 변경은 자동 저장</b> — 별도 저장 버튼 없음. 다른 사람도 실시간으로 같은 화면을 봅니다.</div>
+  <div class="page-num">2</div>
+</section>
+
+<!-- ============ 3: 회차 7단계 ============ -->
+<section class="slide">
+  <h2>회차 작업 7단계</h2>
+  <p style="color:var(--text2)">단계는 순서대로 진행합니다. 진행률(%)은 일부 단계에서만 사용됩니다.</p>
+  <div class="stages-row">
+    <div class="stage-cell" style="background:#2d2f4a;color:var(--text2)"><span class="num">0</span>미시작</div>
+    <div class="stage-cell" style="background:#2a2e3a;color:#a0a0c0"><span class="num">1</span>각색 완료</div>
+    <div class="stage-cell" style="background:#1a3a5c;color:var(--cyan)"><span class="num">2</span>이미지 추출 중</div>
+    <div class="stage-cell" style="background:#3a2e1a;color:var(--yellow)"><span class="num">3</span>영상초안작업</div>
+    <div class="stage-cell" style="background:#3a1a2e;color:var(--pink)"><span class="num">4</span>피드백 수정중</div>
+    <div class="stage-cell" style="background:#2e1a3a;color:var(--purple)"><span class="num">5</span>마무리 작업중</div>
+    <div class="stage-cell" style="background:#1a3a2e;color:var(--green)"><span class="num">6</span>완료</div>
+  </div>
+  <div class="grid-2" style="margin-top:24px">
+    <div class="card">
+      <h3>진행률(%) 사용 단계</h3>
+      <p style="font-size:14px"><span class="pill pill-yellow">영상초안작업</span> · <span class="pill pill-pink">피드백 수정중</span> · <span class="pill pill-purple">마무리 작업중</span></p>
+      <p style="font-size:13px;color:var(--text2);margin-top:6px">이 단계에서 100%가 되면 자동으로 '🔔 컨펌 필요' 알림이 감독에게 전송됩니다.</p>
+    </div>
+    <div class="card">
+      <h3>각색 / 이미지 추출 단계</h3>
+      <p style="font-size:14px"><span class="pill pill-adapt">각색 완료</span>는 이채은이 '완료' 처리하면 자동 진입.</p>
+      <p style="font-size:14px;margin-top:6px"><span class="pill pill-cyan">이미지 추출 중</span>부터는 작업자가 직접 단계를 진행시킵니다.</p>
+    </div>
+  </div>
+  <div class="page-num">3</div>
+</section>
+
+<!-- ============ 4: 회차 진행 입력 ============ -->
+<section class="slide">
+  <h2>회차 진행 상황 입력</h2>
+  <p style="color:var(--text2)">회차 표에서 행을 클릭하면 수정 모달이 열립니다.</p>
+  <div class="modal-mock" style="margin:20px auto 0;max-width:540px">
+    <div class="modal-mock-hd">두비서 — 3화</div>
+    <div class="modal-mock-row">
+      <span class="lbl">현재 단계</span>
+      <div class="stage-btns">
+        <span class="stage-btn">미시작</span>
+        <span class="stage-btn">각색 완료</span>
+        <span class="stage-btn">이미지 추출</span>
+        <span class="stage-btn sel">영상초안작업</span>
+        <span class="stage-btn">피드백 수정중</span>
+        <span class="stage-btn">마무리</span>
+        <span class="stage-btn">완료</span>
+      </div>
+    </div>
+    <div class="modal-mock-row">
+      <span class="lbl">진행률</span>
+      <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="width:60%;height:100%;background:var(--yellow)"></div></div><span style="font-size:13px;font-weight:700;color:var(--accent)">60%</span></div>
+    </div>
+    <div class="modal-mock-row">
+      <span class="lbl">메모</span>
+      <div style="background:var(--surface2);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:13px;color:var(--text2)">예: 캐릭터 표정 1차 확인 부탁드립니다</div>
+    </div>
+  </div>
+  <div class="tip" style="margin-top:14px"><b>💡 단계 변경 시</b> '✓ 컨펌 완료' / '✓ 각색 완료' 표식이 있었다면 자동으로 사라집니다.</div>
+  <div class="page-num">4</div>
+</section>
+
+<!-- ============ 5: 컨펌 받기 ============ -->
+<section class="slide">
+  <h2>컨펌 받는 흐름</h2>
+  <p style="color:var(--text2)">진행률 100% → 감독이 컨펌 → 다음 단계 자동 진행</p>
+  <div class="flow">
+    <div class="flow-step">단계: 영상초안작업<br><b style="color:var(--yellow)">진행률 100%</b></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step confirm">감독에게<br>'🔔 컨펌 필요' 알림</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">감독이 '완료' 클릭</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step next">자동으로 다음 단계로 진행<br>(피드백 수정중 0%)</div>
+  </div>
+  <div style="margin-top:24px">
+    <h3 style="color:var(--text);font-size:18px">내 화면에 표시되는 컨펌 완료 표식</h3>
+    <div class="mock-table" style="margin-top:10px">
+      <div class="mock-table-row head">
+        <div>회차</div><div>일정</div><div>단계</div><div>진행률</div><div>메모</div>
+      </div>
+      <div class="mock-table-row">
+        <div>3화</div>
+        <div style="color:var(--text2)">5/18~5/22</div>
+        <div><span class="pill pill-pink">피드백 수정중</span> <span class="pill" style="background:#1a3a2e;color:var(--green);border:1px solid #2e6845;font-size:9px">✓ 영상초안작업 컨펌 완료</span></div>
+        <div style="color:var(--text2)">0%</div>
+        <div></div>
+      </div>
+    </div>
+  </div>
+  <div class="page-num">5</div>
+</section>
+
+<!-- ============ 6: 각색 완료 표식 ============ -->
+<section class="slide">
+  <h2>각색 완료 표식 — 이채은이 보내주는 신호</h2>
+  <p style="color:var(--text2)">앞 회차가 피드백 수정중 이상이면 다음 회차 각색이 시작됩니다. 이채은이 '완료'를 누르면 본인 화면에 표식이 나타납니다.</p>
+  <div class="flow" style="margin-top:18px">
+    <div class="flow-step">2화 미시작<br>(1화는 피드백 수정중)</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step cyan">이채은에게 '✏️ 각색 필요' 알림</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step">이채은이 '완료' 클릭</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step next">2화 단계가 '각색 완료'로 진행</div>
+  </div>
+  <div style="margin-top:24px">
+    <h3 style="color:var(--text);font-size:18px">내 화면에 보이는 모습</h3>
+    <div class="mock-table" style="margin-top:10px">
+      <div class="mock-table-row head">
+        <div>회차</div><div>일정</div><div>단계</div><div>진행률</div><div>메모</div>
+      </div>
+      <div class="mock-table-row">
+        <div>2화</div>
+        <div style="color:var(--text2)">5/11~5/15</div>
+        <div><span class="pill pill-adapt">각색 완료</span> <span class="pill pill-cyan" style="font-size:9px">✓ 각색 완료</span></div>
+        <div style="color:var(--text2)">–</div>
+        <div></div>
+      </div>
+    </div>
+  </div>
+  <div class="tip"><b>💡 각색 완료 표식이 보이면</b> 다음 단계인 <b>이미지 추출 중</b>으로 진행하면 됩니다.</div>
+  <div class="page-num">6</div>
+</section>
+
+<!-- ============ 7: 일정 변경 ============ -->
+<section class="slide">
+  <h2>일정 변경 — 캘린더에서 직접</h2>
+  <p style="color:var(--text2)">회차 표의 '일정' 셀을 클릭하면 캘린더 팝업이 열립니다.</p>
+  <div class="grid-2" style="margin-top:18px">
+    <div class="card">
+      <h3>선택 방법</h3>
+      <ul style="font-size:14px;margin-top:8px">
+        <li>첫 번째 클릭 → 시작일</li>
+        <li>두 번째 클릭 → 종료일</li>
+        <li>역순 클릭 시 자동 스왑</li>
+        <li>토·일은 선택 불가 (휴무)</li>
+      </ul>
+    </div>
+    <div class="card orange">
+      <h3 style="color:var(--orange)">⚠️ 자동 시프트</h3>
+      <p style="font-size:14px">앞 회차 일정을 늘리면 <b>뒤 회차들의 일정이 영업일 차이만큼 자동으로 밀립니다.</b></p>
+      <p style="font-size:13px;color:var(--text2);margin-top:6px">예: 1화를 +1 영업일 늘리면, 2화 / 3화… 모두 +1 영업일씩 시프트</p>
+    </div>
+  </div>
+  <div class="warn"><b>⚠️ 일정 지연 자동 추적:</b> 원본 일정은 변하지 않고 별도 저장됩니다. 일정을 늘릴 때마다 관리자용 보드의 '일정 지연' 섹션에 자동으로 누적됩니다.</div>
+  <div class="page-num">7</div>
+</section>
+
+<!-- ============ 8: 두 가지 뷰 활용 ============ -->
+<section class="slide">
+  <h2>'작품별 현황' vs '주간 타임라인'</h2>
+  <p style="color:var(--text2)">상황에 따라 적절한 뷰를 골라 사용하세요.</p>
+  <div class="grid-2" style="margin-top:18px">
+    <div class="card accent">
+      <h3>📋 작품별 현황</h3>
+      <p style="font-size:14px"><b>이럴 때 사용:</b></p>
+      <ul style="font-size:14px;margin-top:6px">
+        <li>회차 단계나 진행률을 자주 수정할 때</li>
+        <li>메모를 입력 / 확인할 때</li>
+        <li>특정 작품의 전체 회차를 한눈에 볼 때</li>
+      </ul>
+    </div>
+    <div class="card accent">
+      <h3>📊 주간 타임라인</h3>
+      <p style="font-size:14px"><b>이럴 때 사용:</b></p>
+      <ul style="font-size:14px;margin-top:6px">
+        <li>전체 작품의 일정 흐름을 시각적으로 볼 때</li>
+        <li>이번 주 / 다음 주 작업 범위를 확인할 때</li>
+        <li>일정 지연 / 겹침을 점검할 때</li>
+      </ul>
+    </div>
+  </div>
+  <div class="tip"><b>💡 막대 / 행 클릭</b>으로 회차 수정 모달이 바로 열립니다 — 두 뷰 모두에서 가능.</div>
+  <div class="page-num">8</div>
+</section>
+
+<!-- ============ 9: 협업 / 모바일 ============ -->
+<section class="slide">
+  <h2>실시간 협업 / 모바일 지원</h2>
+  <div class="grid-3" style="margin-top:18px">
+    <div class="card green">
+      <h3 style="color:var(--green)">자동 저장</h3>
+      <p style="font-size:14px;margin-top:6px">변경 즉시 클라우드(DB)에 저장. 별도 저장 버튼 / 새로고침 불필요.</p>
+    </div>
+    <div class="card cyan">
+      <h3 style="color:var(--cyan)">실시간 동기화</h3>
+      <p style="font-size:14px;margin-top:6px">감독 / 다른 작업자의 변경이 1초 내에 내 화면에도 반영.</p>
+    </div>
+    <div class="card accent">
+      <h3>모바일 / 태블릿</h3>
+      <p style="font-size:14px;margin-top:6px">같은 URL을 휴대폰 브라우저로 열면 자동으로 모바일 레이아웃. 모든 기능 동일하게 동작.</p>
+    </div>
+  </div>
+  <div class="tip"><b>💡 모바일에서는</b> 좌측 상단 ☰ 버튼으로 사이드바를 열어 작업자 선택.</div>
+  <div class="page-num">9</div>
+</section>
+
+<!-- ============ 10: 끝 ============ -->
+<section class="slide cover">
+  <div class="icon">🎉</div>
+  <h1 style="color:var(--accent);font-size:48px">이용 끝</h1>
+  <div class="sub-title" style="margin-top:14px">막히는 부분이 있으면 감독님 또는 개발 담당자에게 문의</div>
+  <div style="margin-top:30px;font-size:14px;color:var(--text2)">
+    키보드 <span class="key">←</span> <span class="key">→</span> 또는 <span class="key">Space</span> 로 슬라이드 이동
+  </div>
+  <div class="page-num">10</div>
+</section>
+
+</div>
+
+<div class="nav">
+  <button id="prev">‹ 이전</button>
+  <span class="num" id="num">1 / 10</span>
+  <button id="next">다음 ›</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let cur = 0;
+  function show(i) {
+    slides[cur].classList.remove('active');
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    slides[cur].classList.add('active');
+    document.getElementById('num').textContent = `${cur + 1} / ${slides.length}`;
+    document.getElementById('prev').disabled = cur === 0;
+    document.getElementById('next').disabled = cur === slides.length - 1;
+  }
+  document.getElementById('prev').onclick = () => show(cur - 1);
+  document.getElementById('next').onclick = () => show(cur + 1);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); show(cur + 1); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp')                     { e.preventDefault(); show(cur - 1); }
+    if (e.key === 'Home') show(0);
+    if (e.key === 'End')  show(slides.length - 1);
+  });
+  show(0);
+</script>
+
+</body>
+</html>
