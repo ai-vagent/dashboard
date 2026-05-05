@@ -257,7 +257,7 @@
     .header-tabs{margin-left:0;flex:1;overflow-x:auto;-webkit-overflow-scrolling:touch;}
     .header-tab{padding:6px 10px;font-size:12px;flex-shrink:0;}
     .header-btns{gap:5px;flex-shrink:0;}
-    .header-btns .header-tab{display:none;} /* 관리자용 보드 탭은 사이드바 메뉴로 이동 */
+    .header-btns .header-tab{padding:6px 9px;font-size:11px;flex-shrink:0;white-space:nowrap;}
     .hbtn{padding:6px 9px;font-size:11px;}
     .hbtn-text{display:none;}
     .hbtn-icon{display:inline;}
@@ -339,12 +339,6 @@
         <div class="wbadge" id="badge-all">–</div>
       </div>
       <div id="worker-cards"></div>
-    </div>
-    <div class="sb-section sb-mobile-only">
-      <div class="sb-label">메뉴</div>
-      <div class="wcard" onclick="switchTab('admin');closeSidebarMobile()">
-        <div><div class="wname">📊 관리자용 보드</div></div>
-      </div>
     </div>
     <div class="sb-section">
       <div class="sb-label">회차 단계</div>
