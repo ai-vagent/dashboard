@@ -14,6 +14,7 @@ drop table if exists workers  cascade;
 drop function if exists generate_episodes_for_work(int) cascade;
 drop function if exists work_default_episodes()         cascade;
 drop function if exists set_updated_at()                cascade;
+drop function if exists add_business_days(date, int)    cascade;
 
 -- ============================================================
 -- 1) workers 테이블 (작업자 / 감독)
@@ -94,16 +95,35 @@ alter publication supabase_realtime add table episodes;
 -- ============================================================
 -- 6) 회차 자동 생성 함수 + 트리거
 --   - WEEK_ORIGIN = 2026-05-04 (월요일)
---   - 회차 i (1-indexed) = WEEK_ORIGIN + (base_wk + i - 1) * 7일 (월~금)
---   - base_wk: start_month별 첫 주 인덱스 (대시보드 JS와 일치)
+--   - 각 회차당 14 영업일 (월~금만 카운트, 토·일 제외)
+--   - 회차들은 끊김 없이 순차적으로 진행 (이전 회차 종료 다음 영업일 = 새 회차 시작)
 -- ============================================================
+
+-- 영업일(월~금) 더하기
+create or replace function add_business_days(d date, n int) returns date as $$
+declare
+  r date := d;
+  i int := 0;
+begin
+  while i < n loop
+    r := r + 1;
+    if extract(dow from r) not in (0, 6) then
+      i := i + 1;
+    end if;
+  end loop;
+  return r;
+end;
+$$ language plpgsql immutable;
+
 create or replace function generate_episodes_for_work(p_work_id int) returns void as $$
 declare
-  w        record;
-  i        int;
-  base_wk  int;
-  mon      date;
-  fri      date;
+  w           record;
+  i           int;
+  base_wk     int;
+  cursor_d    date;
+  start_d     date;
+  end_d       date;
+  ep_days int := 14; -- 회차당 영업일 (시작일 포함)
 begin
   select * into w from works where id = p_work_id;
   if not found then return; end if;
@@ -113,16 +133,19 @@ begin
     when 9  then 18 when 10 then 22 when 11 then 26 when 12 then 31
     else 0 end;
 
+  cursor_d := date '2026-05-04' + (base_wk * 7);  -- 시작 월요일
+
   for i in 1..w.total_ep loop
-    mon := date '2026-05-04' + ((base_wk + i - 1) * 7);
-    fri := mon + 4;
+    start_d := cursor_d;
+    end_d   := add_business_days(start_d, ep_days - 1);  -- 14 영업일 (시작일 포함)
     insert into episodes (
       work_id, ep_num, start_date, end_date,
       original_start_date, original_end_date,
       stage, progress, memo
     )
-    values (p_work_id, i, mon, fri, mon, fri, 0, 0, '')
+    values (p_work_id, i, start_d, end_d, start_d, end_d, 0, 0, '')
     on conflict (work_id, ep_num) do nothing;
+    cursor_d := add_business_days(end_d, 1);  -- 다음 회차는 다음 영업일부터
   end loop;
 end;
 $$ language plpgsql;

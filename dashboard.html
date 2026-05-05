@@ -251,8 +251,7 @@
 
   @media (max-width: 900px) {
     header{padding:0 10px;gap:8px;}
-    header h1{font-size:14px;}
-    header h1 .t-pre,header h1 .t-post{display:none;}
+    header h1{display:none;}
     .menu-btn{display:block;}
     .header-tabs{margin-left:0;flex:1;overflow-x:auto;-webkit-overflow-scrolling:touch;}
     .header-tab{padding:6px 10px;font-size:12px;flex-shrink:0;}
@@ -279,9 +278,13 @@
     .modal-body{padding:14px 16px;}
 
     /* 컨펌/각색 카드 — 모바일에서 한 줄로 못 들어가면 자연스럽게 줄바꿈 */
-    .cf-card{grid-template-columns:1fr auto;gap:8px 12px;}
+    .cf-cards{grid-template-columns:1fr;gap:10px;}
+    .cf-card{grid-template-columns:1fr auto;gap:8px 12px;min-width:0;}
+    .cf-card .cf-info{min-width:0;overflow:hidden;}
+    .cf-card .cf-title{white-space:normal;overflow-wrap:anywhere;}
     .cf-card .cf-stage,.cf-card .cf-done-btn{grid-column:1/-1;justify-self:start;}
     .cf-card .cf-done-btn{justify-self:stretch;text-align:center;}
+    .cf-card .cf-sched{white-space:nowrap;}
 
     /* 회차 테이블 — 모바일에서 가로 스크롤 */
     .ep-table{font-size:11px;}
@@ -623,16 +626,27 @@ function assignLanes(items) {
 }
 
 // ── State ────────────────────────────────────────────────────
+// 회차당 기본 영업일 (월~금만 카운트, 토·일 제외)
+const EP_BUSINESS_DAYS = 14;
+
 function makeEps(total, startMonth) {
   const baseWk = MONTH_FIRST_WEEK[startMonth] ?? 0;
-  return Array.from({length: total}, (_, i) => {
-    const mon = new Date(WEEK_ORIGIN);
-    mon.setDate(mon.getDate() + (baseWk + i) * 7);
-    const fri = new Date(mon);
-    fri.setDate(mon.getDate() + 4);
-    const sd = fmtDate(mon), ed = fmtDate(fri);
-    return { ep: i+1, startDate: sd, endDate: ed, originalStartDate: sd, originalEndDate: ed, stage: 0, progress: 0, memo: '' };
-  });
+  let cursor = new Date(WEEK_ORIGIN);
+  cursor.setDate(cursor.getDate() + baseWk * 7); // 시작 월요일
+
+  const eps = [];
+  for (let i = 0; i < total; i++) {
+    const startStr = fmtDate(cursor);
+    const endStr   = addBusinessDays(startStr, EP_BUSINESS_DAYS - 1); // 14 영업일 (시작일 포함)
+    eps.push({
+      ep: i + 1,
+      startDate: startStr, endDate: endStr,
+      originalStartDate: startStr, originalEndDate: endStr,
+      stage: 0, progress: 0, memo: '',
+    });
+    cursor = parseDate(addBusinessDays(endStr, 1)); // 다음 회차는 다음 영업일부터
+  }
+  return eps;
 }
 
 // ── Supabase 설정 ────────────────────────────────────────────
