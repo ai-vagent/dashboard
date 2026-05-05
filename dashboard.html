@@ -296,6 +296,13 @@
     /* 관리자 보드 표 */
     .ab-tw{overflow-x:auto;}
     .ab-tw-row{min-width:520px;}
+    /* 좁은 표(3컬럼 이하)는 화면 폭에 맞춰 스크롤 없이 표시 */
+    .ab-tw-narrow{overflow-x:visible;}
+    .ab-tw-narrow .ab-tw-row{min-width:0;}
+    .ab-tw-narrow .ab-tw-cell{padding:8px 8px;font-size:11px;}
+    .ab-tw-narrow .ab-tw-title{padding:8px 8px;font-size:12px;}
+    .ab-tw-narrow .ab-tw-head .ab-tw-cell{font-size:9px;letter-spacing:.3px;}
+    .ab-tw-narrow .phase-badge{font-size:9px;padding:2px 7px;}
     .ab-stat-grid{grid-template-columns:repeat(2,1fr);}
 
     /* 캘린더 픽커 */
@@ -1127,9 +1134,10 @@ function workRowHTML(w, opts={}) {
 
 function workTableHTML(works, headers, opts) {
   if (works.length === 0) return `<div class="ab-empty">해당 작품이 없습니다.</div>`;
+  const narrowCls = headers.length <= 3 ? ' ab-tw-narrow' : '';
   const head = `<div class="ab-tw-row ab-tw-head">${headers.map(h=>`<div class="ab-tw-cell">${h}</div>`).join('')}</div>`;
   const body = sortWorks(works).map(w => workRowHTML(w, opts)).join('');
-  return `<div class="ab-tw" style="--ab-cols:${headers.length}">${head}${body}</div>`;
+  return `<div class="ab-tw${narrowCls}" style="--ab-cols:${headers.length}">${head}${body}</div>`;
 }
 
 function renderAdminView() {
