@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>애니메이션 제작 대시보드</title>
+<style>
+  :root{
+    --bg:#0f1117; --surface:#1a1d27; --surface2:#22253a; --border:#2e3150;
+    --accent:#6c63ff; --orange:#ff9f43; --cyan:#7ec8e3; --green:#43d98a;
+    --text:#e8eaf6; --text2:#8b90b8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI','Apple SD Gothic Neo',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px 20px;}
+  h1{font-size:32px;margin-bottom:8px;text-align:center;}
+  h1 .accent{color:var(--accent);}
+  .sub{font-size:15px;color:var(--text2);margin-bottom:36px;text-align:center;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;max-width:900px;width:100%;}
+  a.card{display:block;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px 22px;text-decoration:none;color:var(--text);transition:all .15s;border-left:4px solid var(--accent);}
+  a.card:hover{transform:translateY(-3px);border-color:var(--accent);box-shadow:0 8px 24px rgba(108,99,255,.15);}
+  a.card.orange{border-left-color:var(--orange);}
+  a.card.cyan{border-left-color:var(--cyan);}
+  .card .icon{font-size:36px;margin-bottom:10px;}
+  .card .title{font-size:18px;font-weight:700;margin-bottom:6px;}
+  .card .desc{font-size:13px;color:var(--text2);line-height:1.5;}
+  .card .arrow{margin-top:14px;font-size:13px;color:var(--accent);font-weight:600;}
+  a.card.orange .arrow{color:var(--orange);}
+  a.card.cyan .arrow{color:var(--cyan);}
+  footer{margin-top:40px;font-size:12px;color:var(--text2);text-align:center;}
+</style>
+</head>
+<body>
+  <h1>🎬 <span class="accent">애니메이션 제작</span> 대시보드</h1>
+  <div class="sub">2026 시즌 · 제작 진행 관리 시스템</div>
+
+  <div class="grid">
+    <a href="dashboard.html" class="card">
+      <div class="icon">📊</div>
+      <div class="title">대시보드</div>
+      <div class="desc">작품별 현황, 주간 타임라인, 관리자용 보드</div>
+      <div class="arrow">바로가기 →</div>
+    </a>
+
+    <a href="admin_guide.html" class="card orange">
+      <div class="icon">📘</div>
+      <div class="title">관리자용 가이드</div>
+      <div class="desc">이채은 / 배종일 — 컨펌 · 각색 · 일정 관리</div>
+      <div class="arrow">사용법 보기 →</div>
+    </a>
+
+    <a href="worker_guide.html" class="card cyan">
+      <div class="icon">📗</div>
+      <div class="title">작업자용 가이드</div>
+      <div class="desc">회차 진행 입력 · 일정 변경 · 협업 흐름</div>
+      <div class="arrow">사용법 보기 →</div>
+    </a>
+  </div>
+
+  <footer>관련 문의는 개발 담당자에게</footer>
+</body>
+</html>
