@@ -125,11 +125,14 @@
   .ab-prog-pct{font-size:34px;font-weight:800;color:var(--accent);line-height:1;margin-bottom:4px;}
   .ab-list{display:flex;flex-direction:column;gap:8px;}
   .ab-delay-row{display:grid;grid-template-columns:1fr auto auto;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--orange);border-radius:8px;padding:9px 14px;cursor:pointer;}
+  .ab-delay-row.overdue{border-left-color:#ff6584;background:#22171c;}
   .ab-delay-row:hover{background:var(--surface2);}
+  .ab-delay-row.overdue:hover{background:#2c1d24;}
   .ab-delay-title{font-size:13px;font-weight:600;}
   .ab-delay-ep{color:var(--text2);font-weight:500;font-size:11px;margin-left:6px;}
   .ab-delay-dates{font-size:11px;color:var(--text2);}
   .ab-delay-days{font-size:13px;font-weight:700;color:var(--orange);background:#3a2600;padding:3px 10px;border-radius:14px;white-space:nowrap;}
+  .ab-delay-days.overdue{color:#ff6584;background:#3a1a26;border:1px solid #5a2a3c;}
   .ab-empty{padding:20px;text-align:center;color:var(--text2);font-size:12px;background:var(--surface);border:1px dashed var(--border);border-radius:10px;}
   .ab-section-title{font-size:13px;font-weight:700;margin:22px 0 10px;}
   .ab-stat-clickable{cursor:pointer;border-radius:8px;padding:6px 8px;margin:-6px -8px;transition:background .15s;}
@@ -811,14 +814,29 @@ function getAdaptItems() {
 // 일정 지연 (originalEndDate 대비 endDate가 늦어진 회차들)
 function getDelayedItems() {
   const out = [];
+  const today = fmtDate(new Date());
   state.works.forEach(w => {
     w.episodes.forEach(ep => {
-      if (!ep.originalEndDate) return;
-      const delay = businessDaysBetween(ep.originalEndDate, ep.endDate);
-      if (delay > 0) out.push({
-        workId: w.id, workTitle: w.title, ep: ep.ep,
-        delay, originalEndDate: ep.originalEndDate, endDate: ep.endDate,
-      });
+      if (!ep.endDate) return;
+      // (1) 종료일이 지났는데 아직 '완료(stage 6)'가 아님 → 더 위급한 미완료 초과
+      if (ep.stage !== 6 && today > ep.endDate) {
+        out.push({
+          kind: 'overdue',
+          workId: w.id, workTitle: w.title, ep: ep.ep, stage: ep.stage,
+          delay: businessDaysBetween(ep.endDate, today),
+          originalEndDate: ep.originalEndDate, endDate: ep.endDate,
+        });
+        return;
+      }
+      // (2) 원본 일정 대비 종료일이 늦춰진 케이스 (캐스케이드 등)
+      if (ep.originalEndDate) {
+        const delay = businessDaysBetween(ep.originalEndDate, ep.endDate);
+        if (delay > 0) out.push({
+          kind: 'reschedule',
+          workId: w.id, workTitle: w.title, ep: ep.ep, stage: ep.stage,
+          delay, originalEndDate: ep.originalEndDate, endDate: ep.endDate,
+        });
+      }
     });
   });
   return out;
@@ -1131,7 +1149,13 @@ function renderAdminView() {
   const pct = totalEps > 0 ? Math.round((doneEps / totalEps) * 100) : 0;
 
   // 일정 지연
-  const delays = getDelayedItems().sort((a,b) => b.delay - a.delay);
+  // 미완료 초과(overdue)를 일정 변경(reschedule)보다 우선, 그 안에서 지연 일수 큰 순
+  const delays = getDelayedItems().sort((a,b) => {
+    if (a.kind !== b.kind) return a.kind === 'overdue' ? -1 : 1;
+    return b.delay - a.delay;
+  });
+  const overdueCount    = delays.filter(d => d.kind === 'overdue').length;
+  const rescheduleCount = delays.filter(d => d.kind === 'reschedule').length;
 
   let html = `
     <h2 style="font-size:18px;font-weight:700;margin-bottom:14px;">관리자용 보드</h2>
@@ -1172,7 +1196,7 @@ function renderAdminView() {
     <div id="ab-sec-noworker" class="ab-section-title">👤 담당자 미정 <span style="color:var(--text2)">· ${noWorkerList.length}</span></div>
     ${workTableHTML(noWorkerList, ['작품','담당자','전처리 단계'], {showPhase:true})}
 
-    <div class="ab-section-title">⚠️ 일정 지연 ${delays.length > 0 ? `<span style="color:var(--orange)">· ${delays.length}건</span>` : ''}</div>
+    <div class="ab-section-title">⚠️ 일정 지연 ${delays.length > 0 ? `<span style="color:var(--orange)">· ${delays.length}건</span>${overdueCount>0?` <span style="color:var(--pink);margin-left:6px">🔴 미완료 ${overdueCount}건</span>`:''}` : ''}</div>
   `;
 
   if (delays.length === 0) {
@@ -1180,13 +1204,18 @@ function renderAdminView() {
   } else {
     html += `<div class="ab-list">`;
     delays.forEach(d => {
-      html += `<div class="ab-delay-row" onclick="openEditEpisode(${d.workId},${d.ep})">
+      const isOverdue = d.kind === 'overdue';
+      const datesHTML = isOverdue
+        ? `마감 ${fmtRange(d.endDate, d.endDate)} · 현재 ${STAGES[d.stage]}`
+        : `${fmtRange(d.originalEndDate, d.originalEndDate)} → ${fmtRange(d.endDate, d.endDate)}`;
+      const badgeText = isOverdue ? `🔴 ${d.delay}일 초과 · 미완료` : `+${d.delay}일 지연`;
+      html += `<div class="ab-delay-row${isOverdue?' overdue':''}" onclick="openEditEpisode(${d.workId},${d.ep})">
         <div>
           <span class="ab-delay-title">${d.workTitle}</span>
           <span class="ab-delay-ep">${d.ep}화</span>
         </div>
-        <div class="ab-delay-dates">${fmtRange(d.originalEndDate, d.originalEndDate)} → ${fmtRange(d.endDate, d.endDate)}</div>
-        <div class="ab-delay-days">+${d.delay}일 지연</div>
+        <div class="ab-delay-dates">${datesHTML}</div>
+        <div class="ab-delay-days${isOverdue?' overdue':''}">${badgeText}</div>
       </div>`;
     });
     html += `</div>`;
