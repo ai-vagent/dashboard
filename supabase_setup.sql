@@ -42,6 +42,7 @@ create table works (
   start_month int   not null,
   total_ep    int   not null default 12,
   pre_phase   int   not null default 0,                          -- 0:작품선정 1:아트스타일 2:주요인물 3:연재중
+  ep_days     int   not null default 14,                         -- 회차당 작업 영업일 (시작일 포함)
   created_at  timestamptz default now(),
   updated_at  timestamptz default now()
 );
@@ -123,7 +124,7 @@ declare
   cursor_d    date;
   start_d     date;
   end_d       date;
-  ep_days int := 14; -- 회차당 영업일 (시작일 포함)
+  -- ep_days는 w.ep_days (works 테이블의 작품별 설정값) 사용
 begin
   select * into w from works where id = p_work_id;
   if not found then return; end if;
@@ -137,7 +138,7 @@ begin
 
   for i in 1..w.total_ep loop
     start_d := cursor_d;
-    end_d   := add_business_days(start_d, ep_days - 1);  -- 14 영업일 (시작일 포함)
+    end_d   := add_business_days(start_d, w.ep_days - 1);
     insert into episodes (
       work_id, ep_num, start_date, end_date,
       original_start_date, original_end_date,

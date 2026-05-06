@@ -429,7 +429,7 @@
         <div class="fg"><label class="fl">작품명</label><input class="fi" id="inp-title" placeholder="작품명 입력"></div>
         <div class="fg"><label class="fl">메인 작업자</label><select class="fs" id="inp-worker"></select></div>
       </div>
-      <div class="frow">
+      <div class="frow" style="grid-template-columns:1fr 1fr 1fr">
         <div class="fg">
           <label class="fl">연재 시작 (월)</label>
           <select class="fs" id="inp-startMonth">
@@ -439,6 +439,7 @@
           </select>
         </div>
         <div class="fg"><label class="fl">총 회차 수</label><input class="fi" id="inp-totalEp" type="number" min="1" max="40" value="12"></div>
+        <div class="fg"><label class="fl">회차당 작업일 (영업일)</label><input class="fi" id="inp-epDays" type="number" min="1" max="60" value="14"></div>
       </div>
       <div class="fg">
         <label class="fl">현재 전처리 단계</label>
@@ -751,7 +752,7 @@ async function loadAll() {
   state.works = (worksRes.data || []).map(w => ({
     id: w.id, title: w.title,
     worker: w.worker || '',
-    startMonth: w.start_month, totalEp: w.total_ep, prePhase: w.pre_phase,
+    startMonth: w.start_month, totalEp: w.total_ep, prePhase: w.pre_phase, epDays: w.ep_days ?? 14,
     episodes: (epsByWork[w.id] || []).sort((a,b) => a.ep - b.ep),
   }));
 }
@@ -1112,7 +1113,7 @@ function workCardHTML(w) {
     <div class="wk-header">
       <div>
         <div class="wk-title">${w.title}</div>
-        <div class="wk-meta"><span style="font-weight:600">${wName(w.worker)}</span>${roleTxt} &nbsp;·&nbsp; ${w.startMonth}월 시작 &nbsp;·&nbsp; ${w.totalEp}화</div>
+        <div class="wk-meta"><span style="font-weight:600">${wName(w.worker)}</span>${roleTxt} &nbsp;·&nbsp; ${w.startMonth}월 시작 &nbsp;·&nbsp; ${w.totalEp}화 &nbsp;·&nbsp; ${w.epDays}영업일</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="phase-badge">${PRE_PHASES[w.prePhase]}</span>
@@ -1530,6 +1531,7 @@ function openAddWork() {
   document.getElementById('inp-worker').value = '';
   document.getElementById('inp-startMonth').value = '5';
   document.getElementById('inp-totalEp').value = '12';
+  document.getElementById('inp-epDays').value = '14';
   document.getElementById('inp-prePhase').value = '0';
   document.getElementById('modal-work-title').textContent = '작품 추가';
   document.getElementById('modal-work').classList.add('open');
@@ -1543,6 +1545,7 @@ function openEditWork(id) {
   document.getElementById('inp-worker').value = w.worker;
   document.getElementById('inp-startMonth').value = w.startMonth;
   document.getElementById('inp-totalEp').value = w.totalEp;
+  document.getElementById('inp-epDays').value = w.epDays;
   document.getElementById('inp-prePhase').value = w.prePhase;
   document.getElementById('modal-work-title').textContent = '작품 수정 — ' + w.title;
   document.getElementById('modal-work').classList.add('open');
@@ -1553,22 +1556,23 @@ async function saveWork() {
   if (btn.disabled) return;
   btn.disabled = true;
   try {
-    const title = document.getElementById('inp-title').value.trim();
+    const title      = document.getElementById('inp-title').value.trim();
     if (!title) { alert('작품명을 입력하세요'); return; }
     const worker     = document.getElementById('inp-worker').value || null;
     const startMonth = parseInt(document.getElementById('inp-startMonth').value);
     const totalEp    = parseInt(document.getElementById('inp-totalEp').value);
+    const epDays     = parseInt(document.getElementById('inp-epDays').value) || 14;
     const prePhase   = parseInt(document.getElementById('inp-prePhase').value);
 
     if (state.editingWorkId) {
       const w = state.works.find(x => x.id === state.editingWorkId);
-      const changed = w.totalEp !== totalEp || w.startMonth !== startMonth;
+      const changed = w.totalEp !== totalEp || w.startMonth !== startMonth || w.epDays !== epDays;
       if (changed) {
         const r = await supabase.from('episodes').delete().eq('work_id', w.id);
         if (dbErr('회차 초기화', r.error)) return;
       }
       const upd = await supabase.from('works').update({
-        title, worker, start_month: startMonth, total_ep: totalEp, pre_phase: prePhase,
+        title, worker, start_month: startMonth, total_ep: totalEp, ep_days: epDays, pre_phase: prePhase,
       }).eq('id', w.id);
       if (dbErr('작품 수정', upd.error)) return;
       if (changed) {
@@ -1578,7 +1582,7 @@ async function saveWork() {
     } else {
       // 새 작품 — 트리거가 자동으로 회차 생성
       const ins = await supabase.from('works').insert({
-        title, worker, start_month: startMonth, total_ep: totalEp, pre_phase: prePhase,
+        title, worker, start_month: startMonth, total_ep: totalEp, ep_days: epDays, pre_phase: prePhase,
       });
       if (dbErr('작품 추가', ins.error)) return;
     }
