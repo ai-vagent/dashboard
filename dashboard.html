@@ -853,12 +853,12 @@ function getDelayedItems() {
   state.works.forEach(w => {
     w.episodes.forEach(ep => {
       if (!ep.endDate) return;
-      // 원래 종료일이 지났는데 아직 '완료(stage 6)'가 아님
-      if (ep.stage !== 6 && today > ep.originalEndDate) {
+      // 현재 기록된 작업 종료일이 지났는데 아직 '완료(stage 6)'가 아님
+      if (ep.stage !== 6 && today > ep.endDate) {
         out.push({
           workId: w.id, workTitle: w.title, ep: ep.ep, stage: ep.stage,
-          delay: businessDaysBetween(ep.originalEndDate, today),
-          originalEndDate: ep.originalEndDate,
+          delay: businessDaysBetween(ep.endDate, today),
+          endDate: ep.endDate,
         });
       }
     });
@@ -1286,7 +1286,7 @@ function renderAdminView() {
           <span class="ab-delay-title">${d.workTitle}</span>
           <span class="ab-delay-ep">${d.ep}화</span>
         </div>
-        <div class="ab-delay-dates">마감 ${fmtRange(d.originalEndDate, d.originalEndDate)} · 현재 ${STAGES[d.stage]}</div>
+        <div class="ab-delay-dates">마감 ${fmtRange(d.endDate, d.endDate)} · 현재 ${STAGES[d.stage]}</div>
         <div class="ab-delay-days overdue">🔴 ${d.delay}일 초과</div>
       </div>`;
     });
