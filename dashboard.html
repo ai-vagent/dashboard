@@ -853,23 +853,12 @@ function getDelayedItems() {
   state.works.forEach(w => {
     w.episodes.forEach(ep => {
       if (!ep.endDate) return;
-      // (1) 종료일이 지났는데 아직 '완료(stage 6)'가 아님 → 더 위급한 미완료 초과
-      if (ep.stage !== 6 && today > ep.endDate) {
+      // 원래 종료일이 지났는데 아직 '완료(stage 6)'가 아님
+      if (ep.stage !== 6 && today > ep.originalEndDate) {
         out.push({
-          kind: 'overdue',
           workId: w.id, workTitle: w.title, ep: ep.ep, stage: ep.stage,
-          delay: businessDaysBetween(ep.endDate, today),
-          originalEndDate: ep.originalEndDate, endDate: ep.endDate,
-        });
-        return;
-      }
-      // (2) 원본 일정 대비 종료일이 늦춰진 케이스 (캐스케이드 등)
-      if (ep.originalEndDate) {
-        const delay = businessDaysBetween(ep.originalEndDate, ep.endDate);
-        if (delay > 0) out.push({
-          kind: 'reschedule',
-          workId: w.id, workTitle: w.title, ep: ep.ep, stage: ep.stage,
-          delay, originalEndDate: ep.originalEndDate, endDate: ep.endDate,
+          delay: businessDaysBetween(ep.originalEndDate, today),
+          originalEndDate: ep.originalEndDate,
         });
       }
     });
@@ -1242,14 +1231,8 @@ function renderAdminView() {
   const notStarted  = allEps.filter(e => e.stage === 0).length;
   const pct = totalEps > 0 ? Math.round((doneEps / totalEps) * 100) : 0;
 
-  // 일정 지연
-  // 미완료 초과(overdue)를 일정 변경(reschedule)보다 우선, 그 안에서 지연 일수 큰 순
-  const delays = getDelayedItems().sort((a,b) => {
-    if (a.kind !== b.kind) return a.kind === 'overdue' ? -1 : 1;
-    return b.delay - a.delay;
-  });
-  const overdueCount    = delays.filter(d => d.kind === 'overdue').length;
-  const rescheduleCount = delays.filter(d => d.kind === 'reschedule').length;
+  // 일정 지연: 원래 종료일이 지났는데 미완료인 회차, 지연 일수 큰 순
+  const delays = getDelayedItems().sort((a, b) => b.delay - a.delay);
 
   let html = `
     <h2 style="font-size:18px;font-weight:700;margin-bottom:14px;">관리자용 보드</h2>
@@ -1290,7 +1273,7 @@ function renderAdminView() {
     <div id="ab-sec-noworker" class="ab-section-title">👤 담당자 미정 <span style="color:var(--text2)">· ${noWorkerList.length}</span></div>
     ${workTableHTML(noWorkerList, ['작품','담당자','전처리 단계'], {showPhase:true})}
 
-    <div class="ab-section-title">⚠️ 일정 지연 ${delays.length > 0 ? `<span style="color:var(--orange)">· ${delays.length}건</span>${overdueCount>0?` <span style="color:var(--pink);margin-left:6px">🔴 미완료 ${overdueCount}건</span>`:''}` : ''}</div>
+    <div class="ab-section-title">⚠️ 일정 지연 ${delays.length > 0 ? `<span style="color:#ff6584">· ${delays.length}건</span>` : ''}</div>
   `;
 
   if (delays.length === 0) {
@@ -1298,18 +1281,13 @@ function renderAdminView() {
   } else {
     html += `<div class="ab-list">`;
     delays.forEach(d => {
-      const isOverdue = d.kind === 'overdue';
-      const datesHTML = isOverdue
-        ? `마감 ${fmtRange(d.endDate, d.endDate)} · 현재 ${STAGES[d.stage]}`
-        : `${fmtRange(d.originalEndDate, d.originalEndDate)} → ${fmtRange(d.endDate, d.endDate)}`;
-      const badgeText = isOverdue ? `🔴 ${d.delay}일 초과 · 미완료` : `+${d.delay}일 지연`;
-      html += `<div class="ab-delay-row${isOverdue?' overdue':''}" onclick="openEditEpisode(${d.workId},${d.ep})">
+      html += `<div class="ab-delay-row overdue" onclick="openEditEpisode(${d.workId},${d.ep})">
         <div>
           <span class="ab-delay-title">${d.workTitle}</span>
           <span class="ab-delay-ep">${d.ep}화</span>
         </div>
-        <div class="ab-delay-dates">${datesHTML}</div>
-        <div class="ab-delay-days${isOverdue?' overdue':''}">${badgeText}</div>
+        <div class="ab-delay-dates">마감 ${fmtRange(d.originalEndDate, d.originalEndDate)} · 현재 ${STAGES[d.stage]}</div>
+        <div class="ab-delay-days overdue">🔴 ${d.delay}일 초과</div>
       </div>`;
     });
     html += `</div>`;
