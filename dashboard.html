@@ -1544,18 +1544,43 @@ async function saveWork() {
 
     if (state.editingWorkId) {
       const w = state.works.find(x => x.id === state.editingWorkId);
-      const changed = w.totalEp !== totalEp || w.startMonth !== startMonth || w.epDays !== epDays;
-      if (changed) {
+      const scheduleChanged = w.totalEp !== totalEp || w.startMonth !== startMonth;
+      const daysChanged     = w.epDays !== epDays;
+
+      // 총 회차 수 · 시작 월 변경 → 전체 회차 삭제 후 재생성
+      if (scheduleChanged) {
         const r = await supabase.from('episodes').delete().eq('work_id', w.id);
         if (dbErr('회차 초기화', r.error)) return;
       }
+
       const upd = await supabase.from('works').update({
         title, worker, start_month: startMonth, total_ep: totalEp, ep_days: epDays, pre_phase: prePhase,
       }).eq('id', w.id);
       if (dbErr('작품 수정', upd.error)) return;
-      if (changed) {
+
+      if (scheduleChanged) {
+        // generate_episodes_for_work가 w.ep_days를 읽으므로 새 epDays도 함께 반영됨
         const rpc = await supabase.rpc('generate_episodes_for_work', { p_work_id: w.id });
         if (dbErr('회차 생성', rpc.error)) return;
+      } else if (daysChanged) {
+        // ep_days만 변경 → 미시작(stage===0) 회차의 날짜만 순서대로 재계산
+        const allEps = [...w.episodes].sort((a, b) => a.ep - b.ep);
+        let cursor = null;
+        for (const ep of allEps) {
+          if (ep.stage > 0) {
+            // 시작된 회차는 건드리지 않고, 그 종료일 다음 영업일로 커서 이동
+            cursor = addBusinessDays(ep.endDate, 1);
+            continue;
+          }
+          const newStart = cursor ?? ep.startDate;
+          const newEnd   = addBusinessDays(newStart, epDays - 1);
+          const r = await supabase.from('episodes').update({
+            start_date: newStart, end_date: newEnd,
+            original_start_date: newStart, original_end_date: newEnd,
+          }).eq('work_id', w.id).eq('ep_num', ep.ep);
+          if (dbErr('회차 작업일 변경', r.error)) return;
+          cursor = addBusinessDays(newEnd, 1);
+        }
       }
     } else {
       // 새 작품 — 트리거가 자동으로 회차 생성
