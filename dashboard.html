@@ -384,7 +384,7 @@
       <div class="sb-label">회차 단계</div>
       <div class="legend">
         <div class="leg"><div class="legdot" style="background:#a0a0c0"></div>각색 완료</div>
-        <div class="leg"><div class="legdot" style="background:#7ec8e3"></div>이미지 추출 중</div>
+        <div class="leg"><div class="legdot" style="background:#7ec8e3"></div>영상 추출 중</div>
         <div class="leg"><div class="legdot" style="background:#ffd166"></div>영상초안작업</div>
         <div class="leg"><div class="legdot" style="background:#ff9fb5"></div>피드백 수정중</div>
         <div class="leg"><div class="legdot" style="background:#c084fc"></div>마무리 작업중</div>
@@ -439,7 +439,7 @@
           </select>
         </div>
         <div class="fg"><label class="fl">총 회차 수</label><input class="fi" id="inp-totalEp" type="number" min="1" max="40" value="12"></div>
-        <div class="fg"><label class="fl">회차당 작업일 (영업일)</label><input class="fi" id="inp-epDays" type="number" min="1" max="60" value="14"></div>
+        <div class="fg"><label class="fl">회차당 작업일 (영업일)</label><input class="fi" id="inp-epDays" type="number" min="1" max="60" value="5"></div>
       </div>
       <div class="fg">
         <label class="fl">현재 전처리 단계</label>
@@ -551,7 +551,7 @@
 
 <script>
 // ── 상수 ────────────────────────────────────────────────────
-const STAGES       = ['미시작','각색 완료','이미지 추출 중','영상초안작업','피드백 수정중','마무리 작업중','완료'];
+const STAGES       = ['미시작','각색 완료','영상 추출 중','영상초안작업','피드백 수정중','마무리 작업중','완료'];
 const STAGE_CLS    = ['s0','s1','s2','s3','s4','s5','s6'];
 const STAGE_COLORS = ['#555','#a0a0c0','#7ec8e3','#ffd166','#ff9fb5','#c084fc','#43d98a'];
 const PROG_STAGES  = [3, 4, 5]; // 영상초안작업, 피드백 수정중, 마무리 작업중 (진행률 표시)
@@ -665,7 +665,7 @@ function assignLanes(items) {
 
 // ── State ────────────────────────────────────────────────────
 // 회차당 기본 영업일 (월~금만 카운트, 토·일 제외)
-const EP_BUSINESS_DAYS = 14;
+const EP_BUSINESS_DAYS = 5;
 
 function makeEps(total, startMonth) {
   const baseWk = MONTH_FIRST_WEEK[startMonth] ?? 0;
@@ -675,7 +675,7 @@ function makeEps(total, startMonth) {
   const eps = [];
   for (let i = 0; i < total; i++) {
     const startStr = fmtDate(cursor);
-    const endStr   = addBusinessDays(startStr, EP_BUSINESS_DAYS - 1); // 14 영업일 (시작일 포함)
+    const endStr   = addBusinessDays(startStr, EP_BUSINESS_DAYS - 1); // 기본 영업일 (시작일 포함)
     eps.push({
       ep: i + 1,
       startDate: startStr, endDate: endStr,
@@ -752,7 +752,7 @@ async function loadAll() {
   state.works = (worksRes.data || []).map(w => ({
     id: w.id, title: w.title,
     worker: w.worker || '',
-    startMonth: w.start_month, totalEp: w.total_ep, prePhase: w.pre_phase, epDays: w.ep_days ?? 14,
+    startMonth: w.start_month, totalEp: w.total_ep, prePhase: w.pre_phase, epDays: w.ep_days ?? 5,
     episodes: (epsByWork[w.id] || []).sort((a,b) => a.ep - b.ep),
   }));
 }
@@ -1509,7 +1509,7 @@ function openAddWork() {
   document.getElementById('inp-worker').value = '';
   document.getElementById('inp-startMonth').value = '5';
   document.getElementById('inp-totalEp').value = '12';
-  document.getElementById('inp-epDays').value = '14';
+  document.getElementById('inp-epDays').value = '5';
   document.getElementById('inp-prePhase').value = '0';
   document.getElementById('modal-work-title').textContent = '작품 추가';
   document.getElementById('modal-work').classList.add('open');
@@ -1539,7 +1539,7 @@ async function saveWork() {
     const worker     = document.getElementById('inp-worker').value || null;
     const startMonth = parseInt(document.getElementById('inp-startMonth').value);
     const totalEp    = parseInt(document.getElementById('inp-totalEp').value);
-    const epDays     = parseInt(document.getElementById('inp-epDays').value) || 14;
+    const epDays     = parseInt(document.getElementById('inp-epDays').value) || 5;
     const prePhase   = parseInt(document.getElementById('inp-prePhase').value);
 
     if (state.editingWorkId) {
