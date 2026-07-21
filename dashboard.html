@@ -1379,8 +1379,8 @@ function workerWorkdayStatsHTML() {
           .filter(ep => ep.stage === 6)
           .map(ep => ({
             ep: ep.ep,
-            actual:  epBizDays(ep.startDate,         ep.endDate),
-            planned: epBizDays(ep.originalStartDate, ep.originalEndDate),
+            actual:  epBizDays(ep.startDate, ep.endDate),
+            planned: work.epDays,   // 작품별 기준일(회차당 작업일)을 기준으로 초과/단축 판정
           }));
         return { title: work.title, eps: doneEps };
       })
