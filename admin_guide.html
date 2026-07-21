@@ -166,7 +166,7 @@
     <div class="card cyan">
       <h3 style="color:var(--cyan)">✏️ 각색 필요 <span class="pill pill-cyan" style="margin-left:6px">이채은 전용</span></h3>
       <p style="font-size:15px;margin-bottom:10px">어떤 회차가 <span class="pill pill-gray">미시작</span>인데 <b>직전 회차가 <span class="pill pill-pink">피드백 수정중</span> 이상</b>이면 자동 발생.</p>
-      <p style="font-size:14px;color:var(--text2)">예: 두비서 1화가 피드백 수정중 → 2화 각색 필요 알림</p>
+      <p style="font-size:14px;color:var(--text2)">예: 살아남은 로맨스 1화가 피드백 수정중 → 2화 각색 필요 알림</p>
     </div>
   </div>
   <div class="tip"><b>💡 사이드바 본인 이름 옆 🔔 숫자</b>가 처리해야 할 알림 총 개수입니다.</div>
@@ -179,7 +179,7 @@
   <div style="margin-top:18px">
     <div class="mock-card">
       <div>
-        <div class="title">두비서 <span class="ep">3화</span></div>
+        <div class="title">살아남은 로맨스 <span class="ep">3화</span></div>
         <div class="worker">김여은</div>
       </div>
       <div class="sched">5/18~5/22</div>
@@ -208,7 +208,7 @@
   <div style="margin-top:18px">
     <div class="mock-card cyan">
       <div>
-        <div class="title">두비서 <span class="ep">2화 각색 필요</span></div>
+        <div class="title">살아남은 로맨스 <span class="ep">2화 각색 필요</span></div>
         <div class="worker">김여은</div>
       </div>
       <div class="sched">5/11~5/15</div>
@@ -246,8 +246,10 @@
   <div style="margin-top:18px">
     <h3 style="color:var(--text);font-size:16px;margin-bottom:8px">회차 표에서 가능한 작업</h3>
     <ul style="font-size:15px">
-      <li>회차 행 클릭 → <b>단계 / 진행률 / 메모 수정</b> 모달</li>
+      <li>회차 행 클릭 → <b>단계 / 진행률 / 링크 수정</b> 모달</li>
       <li>일정 셀 클릭 → <b>캘린더 팝업으로 시작일 / 종료일 변경</b></li>
+      <li><b>완료 및 업로드</b> 회차는 '링크' 칸에 결과물 링크 입력 → 표에는 🔗 아이콘으로 표시(클릭 시 새 탭)</li>
+      <li>회차가 많으면 <b>10화 단위 페이지네이션</b> (표 하단 ‹ 이전 / 다음 ›)</li>
       <li>이번 주 회차는 보라색 강조 + "이번 주" 라벨</li>
     </ul>
   </div>
@@ -279,29 +281,29 @@
   <div class="page-num">7</div>
 </section>
 
-<!-- ============ 8: 관리자용 보드 ============ -->
+<!-- ============ 8: 관리자용 보드 (2개 서브탭) ============ -->
 <section class="slide">
-  <h2>관리자용 보드 — 전체 통계 페이지</h2>
-  <p style="color:var(--text2)">우측 상단 '관리자용 보드' 탭을 클릭. 작업자 필터와 별개로 작동하는 전체 현황 페이지입니다.</p>
-  <div class="grid-3" style="margin-top:18px">
-    <div class="card">
-      <h3>전체 작품 현황</h3>
-      <p style="font-size:14px;color:var(--text2)">총 작품 수 / 연재중 / 대기중 / 완료 / 담당자 미정</p>
-      <p style="font-size:13px;color:var(--accent);margin-top:6px">카드 클릭 → 해당 카테고리 표로 스크롤</p>
+  <h2>관리자용 보드 — 작업자(제작일정) / 작품 탭</h2>
+  <p style="color:var(--text2)">'관리자용 보드'가 두 개의 작은 서브탭으로 나뉩니다. 상단의 작은 탭으로 전환하세요.</p>
+  <div class="grid-2" style="margin-top:14px">
+    <div class="card accent">
+      <h3>🗓️ 작업자 (제작일정) <span class="pill pill-gray" style="font-size:11px">기본 탭</span></h3>
+      <ul style="font-size:13.5px;margin-top:8px">
+        <li><b>📊 제작 일정 인사이트</b> — 요약 스탯(평균 제작일수·총 지연 영업일·지연 최다 단계), 프로세스(단계)별 지연, 작품별 평균 제작일수</li>
+        <li><span class="pill pill-orange" style="font-size:11px">⚠️ 일정 지연</span> 회차 목록 + 지연 일수</li>
+        <li><b>작업자별 완료 회차 작업일</b> — 작품별 기준일과 비교해 초과 / 단축 표시</li>
+      </ul>
     </div>
-    <div class="card">
-      <h3>전체 회차 진행률</h3>
-      <p style="font-size:14px;color:var(--text2)">완료 회차 비율을 % 와 진행 바로 표시</p>
-    </div>
-    <div class="card orange">
-      <h3 style="color:var(--orange)">⚠️ 일정 지연</h3>
-      <p style="font-size:14px;color:var(--text2)">원본 일정 대비 늦어진 회차 + 며칠 지연됐는지</p>
+    <div class="card accent">
+      <h3>📚 작품</h3>
+      <ul style="font-size:13.5px;margin-top:8px">
+        <li>전체 작품 현황 · 전체 회차 진행률(% + 진행 바)</li>
+        <li>📺 연재중 · ⏳ 대기중 · ✅ 완료 · 👤 담당자 미정 표</li>
+        <li>현황 카드 클릭 → 해당 카테고리 표로 스크롤</li>
+      </ul>
     </div>
   </div>
-  <div style="margin-top:14px">
-    <h3 style="color:var(--text);font-size:16px;margin-bottom:6px">하단 카테고리별 표</h3>
-    <p style="font-size:14px">📺 연재중 · ⏳ 대기중 · ✅ 완료 · 👤 담당자 미정 — 각 카테고리별 작품 / 담당자 / 현재 작업 회차 등이 표 형태로 표시됩니다.</p>
-  </div>
+  <div class="warn"><b>⚠️ 제작 일정 인사이트 안내:</b> 회차는 단계 전환 시각을 따로 기록하지 않아 '단계별 지연'은 각 회차의 <b>현재 단계</b> 기준으로 집계한 근사치입니다. 완료 · 지연 회차가 쌓일수록 정확해집니다.</div>
   <div class="page-num">8</div>
 </section>
 
@@ -334,7 +336,7 @@
   <h2>일정 조정 — 자동 캐스케이드</h2>
   <p style="color:var(--text2)">앞 회차 일정을 늘리면 뒤 회차들이 영업일 차이만큼 자동으로 시프트됩니다.</p>
   <div style="margin-top:20px;padding:18px 22px;background:var(--surface);border:1px solid var(--border);border-radius:10px">
-    <div style="font-size:15px;margin-bottom:10px"><b>예시</b>: 두비서 1화 일정을 5/4~5/8 → 5/4~5/11로 변경 (1 영업일 추가)</div>
+    <div style="font-size:15px;margin-bottom:10px"><b>예시</b>: 살아남은 로맨스 1화 일정을 5/4~5/8 → 5/4~5/11로 변경 (1 영업일 추가)</div>
     <div style="display:grid;grid-template-columns:auto 1fr 1fr;gap:8px 16px;font-size:14px;">
       <div style="color:var(--text2)"></div>
       <div style="color:var(--text2);font-weight:600">변경 전</div>

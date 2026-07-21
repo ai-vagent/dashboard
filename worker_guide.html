@@ -127,7 +127,8 @@
       <h3>① 작품별 현황</h3>
       <ul style="font-size:14px;margin-top:8px">
         <li>각 작품별 카드 + 회차 표</li>
-        <li>회차별 단계 / 진행률 / 메모 확인 / 수정</li>
+        <li>회차별 단계 / 진행률 / 링크 확인 / 수정</li>
+        <li>회차가 많으면 10화씩 페이지로 나뉨</li>
         <li>이번 주 회차는 보라색 강조</li>
       </ul>
     </div>
@@ -155,7 +156,7 @@
     <div class="stage-cell" style="background:#3a2e1a;color:var(--yellow)"><span class="num">3</span>영상초안작업</div>
     <div class="stage-cell" style="background:#3a1a2e;color:var(--pink)"><span class="num">4</span>피드백 수정중</div>
     <div class="stage-cell" style="background:#2e1a3a;color:var(--purple)"><span class="num">5</span>마무리 작업중</div>
-    <div class="stage-cell" style="background:#1a3a2e;color:var(--green)"><span class="num">6</span>완료</div>
+    <div class="stage-cell" style="background:#1a3a2e;color:var(--green)"><span class="num">6</span>완료 및 업로드</div>
   </div>
   <div class="grid-2" style="margin-top:24px">
     <div class="card">
@@ -177,7 +178,7 @@
   <h2>회차 진행 상황 입력</h2>
   <p style="color:var(--text2)">회차 표에서 행을 클릭하면 수정 모달이 열립니다.</p>
   <div class="modal-mock" style="margin:20px auto 0;max-width:540px">
-    <div class="modal-mock-hd">두비서 — 3화</div>
+    <div class="modal-mock-hd">살아남은 로맨스 — 3화</div>
     <div class="modal-mock-row">
       <span class="lbl">현재 단계</span>
       <div class="stage-btns">
@@ -187,7 +188,7 @@
         <span class="stage-btn sel">영상초안작업</span>
         <span class="stage-btn">피드백 수정중</span>
         <span class="stage-btn">마무리</span>
-        <span class="stage-btn">완료</span>
+        <span class="stage-btn">완료 및 업로드</span>
       </div>
     </div>
     <div class="modal-mock-row">
@@ -195,11 +196,11 @@
       <div style="display:flex;align-items:center;gap:10px"><div style="flex:1;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden"><div style="width:60%;height:100%;background:var(--yellow)"></div></div><span style="font-size:13px;font-weight:700;color:var(--accent)">60%</span></div>
     </div>
     <div class="modal-mock-row">
-      <span class="lbl">메모</span>
-      <div style="background:var(--surface2);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:13px;color:var(--text2)">예: 캐릭터 표정 1차 확인 부탁드립니다</div>
+      <span class="lbl">링크</span>
+      <div style="background:var(--surface2);border:1px solid var(--border);padding:6px 10px;border-radius:6px;font-size:13px;color:var(--text2)">완료 및 업로드 시 결과물 링크 입력 (예: https://works.do/xxxx) · 그 외 단계에선 자유 메모</div>
     </div>
   </div>
-  <div class="tip" style="margin-top:14px"><b>💡 단계 변경 시</b> '✓ 컨펌 완료' / '✓ 각색 완료' 표식이 있었다면 자동으로 사라집니다.</div>
+  <div class="tip" style="margin-top:14px"><b>💡 '링크' 칸</b>은 예전 '메모' 칸입니다. <b>완료 및 업로드</b> 회차에선 <span class="pill pill-green" style="font-size:11px">링크를 입력하세요</span> 안내가 뜨고, 링크를 넣으면 표에는 <b>🔗 아이콘</b>으로 표시(클릭 시 새 탭). 단계 변경 시 '✓ 컨펌 완료' / '✓ 각색 완료' 표식은 자동으로 사라집니다.</div>
   <div class="page-num">4</div>
 </section>
 
@@ -220,7 +221,7 @@
     <h3 style="color:var(--text);font-size:18px">내 화면에 표시되는 컨펌 완료 표식</h3>
     <div class="mock-table" style="margin-top:10px">
       <div class="mock-table-row head">
-        <div>회차</div><div>일정</div><div>단계</div><div>진행률</div><div>메모</div>
+        <div>회차</div><div>일정</div><div>단계</div><div>진행률</div><div>링크</div>
       </div>
       <div class="mock-table-row">
         <div>3화</div>
@@ -251,7 +252,7 @@
     <h3 style="color:var(--text);font-size:18px">내 화면에 보이는 모습</h3>
     <div class="mock-table" style="margin-top:10px">
       <div class="mock-table-row head">
-        <div>회차</div><div>일정</div><div>단계</div><div>진행률</div><div>메모</div>
+        <div>회차</div><div>일정</div><div>단계</div><div>진행률</div><div>링크</div>
       </div>
       <div class="mock-table-row">
         <div>2화</div>
@@ -300,7 +301,7 @@
       <p style="font-size:14px"><b>이럴 때 사용:</b></p>
       <ul style="font-size:14px;margin-top:6px">
         <li>회차 단계나 진행률을 자주 수정할 때</li>
-        <li>메모를 입력 / 확인할 때</li>
+        <li>링크(결과물) / 메모를 입력·확인할 때</li>
         <li>특정 작품의 전체 회차를 한눈에 볼 때</li>
       </ul>
     </div>

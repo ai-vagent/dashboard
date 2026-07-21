@@ -2143,7 +2143,6 @@ async function seedDatabase() {
     {id:'LCE', name:'이채은',   color:'#ffd166', is_sup:true,  subrole:'각색및총괄', sort_order:1},
     {id:'BJI', name:'배종일',   color:'#4ecdc4', is_sup:true,  subrole:'영상총괄',   sort_order:2},
     {id:'KYE', name:'김여은',   color:'#888',    is_sup:false, subrole:'',           sort_order:10},
-    {id:'JJY', name:'정지윤',   color:'#888',    is_sup:false, subrole:'',           sort_order:11},
     {id:'CHS', name:'추해수',   color:'#888',    is_sup:false, subrole:'',           sort_order:12},
     {id:'WKA', name:'김명진', color:'#888',    is_sup:false, subrole:'',           sort_order:20},
     {id:'WKB', name:'김민경', color:'#888',    is_sup:false, subrole:'',           sort_order:21},
@@ -2152,8 +2151,8 @@ async function seedDatabase() {
   const seedWorks = [
     {title:'두비서',   worker:'KYE', start_month:5, total_ep:12, pre_phase:0},
     {title:'스캔들',   worker:'KYE', start_month:6, total_ep:12, pre_phase:0},
-    {title:'천뮤생',   worker:'JJY', start_month:5, total_ep:12, pre_phase:0},
-    {title:'엘그린',   worker:'JJY', start_month:7, total_ep:12, pre_phase:0},
+    {title:'천뮤생',   worker:null,  start_month:5, total_ep:12, pre_phase:0},
+    {title:'엘그린',   worker:null,  start_month:7, total_ep:12, pre_phase:0},
     {title:'맞불결혼', worker:'LCE', start_month:6, total_ep:12, pre_phase:0},
     {title:'장롱괴물', worker:'BJI', start_month:5, total_ep:12, pre_phase:0},
   ];
