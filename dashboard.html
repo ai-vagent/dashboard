@@ -88,6 +88,11 @@
   .ep-table tr:hover td{background:var(--surface2);}
   .ep-table tr.this-week td{background:rgba(108,99,255,.1);}
   .ep-table tr.this-week td:first-child{border-left:3px solid var(--accent);}
+  .ep-pager{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 10px;border-top:1px solid var(--border);}
+  .ep-pg-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;}
+  .ep-pg-btn:hover:not(:disabled){background:var(--border);}
+  .ep-pg-btn:disabled{opacity:.4;cursor:default;}
+  .ep-pg-info{font-size:11px;color:var(--text2);min-width:110px;text-align:center;}
   .estage{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;}
   .s0{background:#2d2f4a;color:var(--text2);}
   .s1{background:#2a2e3a;color:#a0a0c0;}
@@ -168,6 +173,25 @@
   .ws-slower .ws-ep-actual{color:#ff6584;}
   .ws-slower .ws-ep-badge{color:#ff6584;background:#3a1a26;}
   .ws-same .ws-ep-badge{color:var(--text2);background:var(--surface2);}
+
+  /* ── 제작 일정 인사이트 ── */
+  .pi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-bottom:8px;}
+  .pi-list{display:flex;flex-direction:column;gap:9px;}
+  .pi-row{display:grid;grid-template-columns:120px 1fr auto;align-items:center;gap:10px;}
+  .pi-row.pi-worst{background:rgba(255,101,132,.08);border-radius:8px;margin:0 -8px;padding:4px 8px;}
+  .pi-label{font-size:12px;color:var(--text);min-width:0;}
+  .pi-label.pi-work{display:flex;flex-direction:column;gap:1px;}
+  .pi-work-title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pi-work-worker{font-size:10px;color:var(--text2);}
+  .pi-track{height:9px;background:var(--surface2);border-radius:6px;overflow:hidden;}
+  .pi-fill{height:100%;border-radius:6px;min-width:2px;transition:width .2s;}
+  .pi-num{font-size:13px;font-weight:700;color:var(--text);text-align:right;white-space:nowrap;}
+  .pi-unit{font-size:10px;font-weight:600;color:var(--text2);margin-left:1px;}
+  .pi-sub{font-size:10px;font-weight:500;color:var(--text2);margin-left:4px;}
+  .pi-badge{font-size:10px;padding:1px 7px;border-radius:10px;margin-left:5px;white-space:nowrap;}
+  .pi-badge.ws-faster{color:var(--green);background:#1a3a2a;}
+  .pi-badge.ws-slower{color:#ff6584;background:#3a1a26;}
+  .pi-badge.ws-same{color:var(--text2);background:var(--surface2);}
 
   /* ── Timeline (캘린더 + 간트 막대) ── */
   .tl-scroll{overflow:auto;max-height:calc(100vh - 195px);}
@@ -719,7 +743,10 @@ let state = {
   worksFilter: 'all',
   editingWorkId: null,
   editingEpKey: null,
+  epPage: {},          // workId → 현재 회차 페이지 (0-based)
 };
+
+const EP_PAGE_SIZE = 15;   // 카드당 표시할 최대 회차 수
 
 // ── DB ↔ state 매핑 ─────────────────────────────────────────
 async function loadAll() {
@@ -1071,7 +1098,13 @@ function workCardHTML(w) {
     return `<div class="phase-step"><div class="pdot ${cls}">${icon}</div><div class="plabel">${p}</div></div>`;
   }).join('');
 
-  const epRows = w.episodes.map(ep => {
+  // 회차 페이지네이션: 15화 초과 시 페이지 분할
+  const epTotal   = w.episodes.length;
+  const pageCount = Math.max(1, Math.ceil(epTotal / EP_PAGE_SIZE));
+  const curPage   = Math.min(state.epPage[w.id] || 0, pageCount - 1);
+  const pageEps   = w.episodes.slice(curPage * EP_PAGE_SIZE, (curPage + 1) * EP_PAGE_SIZE);
+
+  const epRows = pageEps.map(ep => {
     const sc = STAGE_COLORS[ep.stage];
     const isThisWeek = isCurrentEp(ep);
     const progHTML = (PROG_STAGES.includes(ep.stage) || ep.progress>0)
@@ -1090,12 +1123,22 @@ function workCardHTML(w) {
     </tr>`;
   }).join('');
 
+  const rangeStart = curPage * EP_PAGE_SIZE + 1;
+  const rangeEnd   = curPage * EP_PAGE_SIZE + pageEps.length;
+  const pagerHTML = pageCount > 1
+    ? `<div class="ep-pager">
+        <button class="ep-pg-btn" ${curPage === 0 ? 'disabled' : ''} onclick="setEpPage(${w.id},${curPage - 1})">‹ 이전</button>
+        <span class="ep-pg-info">${rangeStart}–${rangeEnd}화 · ${curPage + 1}/${pageCount}</span>
+        <button class="ep-pg-btn" ${curPage >= pageCount - 1 ? 'disabled' : ''} onclick="setEpPage(${w.id},${curPage + 1})">다음 ›</button>
+      </div>`
+    : '';
+
   const isPreDone = w.prePhase === 3;
   const bodyHTML = isPreDone
     ? `<table class="ep-table">
         <thead><tr><th>회차</th><th>일정</th><th>단계</th><th>진행률</th><th>메모</th></tr></thead>
         <tbody>${epRows}</tbody>
-      </table>`
+      </table>${pagerHTML}`
     : `<div class="pre-phases">${phaseSteps}</div>`;
 
   return `<div class="wk-card">
@@ -1111,6 +1154,12 @@ function workCardHTML(w) {
     </div>
     ${bodyHTML}
   </div>`;
+}
+
+// 회차 페이지 전환 (작품 카드별)
+function setEpPage(workId, page) {
+  state.epPage[workId] = Math.max(0, page);
+  renderWorksView();
 }
 
 // ── 주간 타임라인 (캘린더 위에 막대) ────────────────────────────
@@ -1156,6 +1205,129 @@ function workTableHTML(works, headers, opts) {
   const head = `<div class="ab-tw-row ab-tw-head">${headers.map(h=>`<div class="ab-tw-cell">${h}</div>`).join('')}<div class="ab-tw-cell"></div></div>`;
   const body = sortWorks(works).map(w => workRowHTML(w, opts)).join('');
   return `<div class="ab-tw${narrowCls}" style="--ab-cols:${headers.length + 1}">${head}${body}</div>`;
+}
+
+// ── 제작 일정 인사이트 (후행 트래킹) ──────────────────────────────
+// 데이터 한계: 회차는 단계 전환 시각을 따로 기록하지 않으므로,
+// '프로세스별 지연'은 각 회차의 '현재 단계'에 지연 영업일을 귀속시켜 집계한다.
+function productionInsights() {
+  const today = fmtDate(new Date());
+  const bizDays = (s, e) => businessDaysBetween(s, e) + 1;  // 시작~종료 포함 제작일수
+
+  // 원래 마감 대비 밀린 영업일 (완료 회차는 실제 종료일, 진행 회차는 종료일/오늘 중 늦은 쪽 기준)
+  function slipDays(ep) {
+    if (!ep.endDate || !ep.originalEndDate) return 0;
+    const ref = ep.stage === 6 ? ep.endDate : (today > ep.endDate ? today : ep.endDate);
+    if (ref <= ep.originalEndDate) return 0;
+    return businessDaysBetween(ep.originalEndDate, ref);
+  }
+
+  const perStage = STAGES.map((label, s) => ({ stage: s, label, count: 0, delayCount: 0, delayDays: 0 }));
+  const perWork  = [];
+  let totActual = 0, totPlanned = 0, doneTot = 0, totDelayDays = 0;
+
+  state.works.forEach(w => {
+    w.episodes.forEach(ep => {
+      if (ep.stage < 1) return;                    // 미시작 제외
+      const ps = perStage[ep.stage];
+      ps.count++;
+      const sd = slipDays(ep);
+      if (sd > 0) { ps.delayCount++; ps.delayDays += sd; totDelayDays += sd; }
+    });
+
+    const done = w.episodes.filter(e => e.stage === 6 && e.startDate && e.endDate);
+    if (done.length) {
+      const actuals  = done.map(e => bizDays(e.startDate, e.endDate));
+      const planneds = done.map(e => bizDays(e.originalStartDate, e.originalEndDate));
+      const a = actuals.reduce((x, y) => x + y, 0);
+      const p = planneds.reduce((x, y) => x + y, 0);
+      totActual += a; totPlanned += p; doneTot += done.length;
+      perWork.push({
+        id: w.id, title: w.title, worker: w.worker,
+        doneCount: done.length,
+        avgActual:  a / done.length,
+        avgPlanned: p / done.length,
+        avgDelta:  (a - p) / done.length,
+      });
+    }
+  });
+
+  perWork.sort((x, y) => y.avgActual - x.avgActual);
+  const worstStage = perStage
+    .filter(s => s.stage >= 1 && s.stage <= 5 && s.delayDays > 0)
+    .sort((a, b) => b.delayDays - a.delayDays)[0] || null;
+
+  return {
+    perStage, perWork, worstStage,
+    overallAvgActual:  doneTot ? totActual  / doneTot : 0,
+    overallAvgPlanned: doneTot ? totPlanned / doneTot : 0,
+    totDelayDays, doneTot,
+  };
+}
+
+function productionInsightsHTML() {
+  const ins = productionInsights();
+  if (ins.doneTot === 0 && ins.totDelayDays === 0) {
+    return `<div class="ab-empty">분석할 제작 데이터가 아직 없습니다. (완료 회차·지연 회차가 생기면 표시됩니다)</div>`;
+  }
+
+  const overallDelta = ins.overallAvgActual - ins.overallAvgPlanned;
+  const deltaCls = overallDelta > 0.05 ? 'ws-slower' : overallDelta < -0.05 ? 'ws-faster' : 'ws-same';
+  const deltaTxt = overallDelta > 0.05 ? `기준 대비 +${overallDelta.toFixed(1)}일`
+                 : overallDelta < -0.05 ? `기준 대비 ${overallDelta.toFixed(1)}일`
+                 : '기준과 동일';
+
+  // 상단 요약 스탯
+  const summary = `<div class="ab-card" style="margin-bottom:16px">
+    <div class="ab-card-title">제작 일정 인사이트 요약</div>
+    <div class="ab-stat-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="ab-stat"><div class="ab-stat-val">${ins.overallAvgActual.toFixed(1)}<span style="font-size:14px;font-weight:600">일</span></div><div class="ab-stat-lbl">평균 제작일수 <span style="color:var(--text2)">(기준 ${ins.overallAvgPlanned.toFixed(1)}일)</span></div></div>
+      <div class="ab-stat"><div class="ab-stat-val ${overallDelta > 0.05 ? 'orange' : 'green'}">${ins.totDelayDays}<span style="font-size:14px;font-weight:600">일</span></div><div class="ab-stat-lbl">총 지연 영업일</div></div>
+      <div class="ab-stat"><div class="ab-stat-val ${ins.worstStage ? 'orange' : 'gray'}" style="font-size:20px">${ins.worstStage ? ins.worstStage.label : '없음'}</div><div class="ab-stat-lbl">지연 최다 단계 ${ins.worstStage ? `<span style="color:var(--text2)">(${ins.worstStage.delayDays}일)</span>` : ''}</div></div>
+    </div>
+  </div>`;
+
+  // 단계(프로세스)별 지연 바 차트
+  const stages = ins.perStage.filter(s => s.stage >= 1);
+  const maxDelay = Math.max(1, ...stages.map(s => s.delayDays));
+  const stageRows = stages.map(s => {
+    const pct = Math.round((s.delayDays / maxDelay) * 100);
+    const isWorst = ins.worstStage && s.stage === ins.worstStage.stage;
+    return `<div class="pi-row${isWorst ? ' pi-worst' : ''}">
+      <div class="pi-label"><span class="estage ${STAGE_CLS[s.stage]}">${s.label}</span></div>
+      <div class="pi-track"><div class="pi-fill" style="width:${pct}%;background:${STAGE_COLORS[s.stage]}"></div></div>
+      <div class="pi-num">${s.delayDays}<span class="pi-unit">일</span> <span class="pi-sub">${s.delayCount}/${s.count}건</span></div>
+    </div>`;
+  }).join('');
+  const stageBlock = `<div class="ab-card">
+    <div class="ab-card-title">프로세스(단계)별 지연 영업일 · 현재 해당 단계의 회차 기준</div>
+    <div class="pi-list">${stageRows}</div>
+  </div>`;
+
+  // 작품별 평균 제작일수 (오래 걸린 순)
+  let workBlock;
+  if (ins.perWork.length === 0) {
+    workBlock = `<div class="ab-card"><div class="ab-card-title">작품별 평균 제작일수</div><div class="ab-empty" style="margin:0">완료된 회차가 아직 없습니다.</div></div>`;
+  } else {
+    const maxAvg = Math.max(...ins.perWork.map(w => w.avgActual));
+    const rows = ins.perWork.map(w => {
+      const pct = Math.round((w.avgActual / maxAvg) * 100);
+      const cls = w.avgDelta > 0.05 ? 'ws-slower' : w.avgDelta < -0.05 ? 'ws-faster' : 'ws-same';
+      const badge = w.avgDelta > 0.05 ? `▼${w.avgDelta.toFixed(1)}일 초과`
+                  : w.avgDelta < -0.05 ? `▲${(-w.avgDelta).toFixed(1)}일 단축` : '기준';
+      return `<div class="pi-row">
+        <div class="pi-label pi-work"><span class="pi-work-title">${w.title}</span><span class="pi-work-worker">${wName(w.worker)} · ${w.doneCount}화</span></div>
+        <div class="pi-track"><div class="pi-fill" style="width:${pct}%;background:var(--accent)"></div></div>
+        <div class="pi-num">${w.avgActual.toFixed(1)}<span class="pi-unit">일</span> <span class="pi-badge ${cls}">${badge}</span></div>
+      </div>`;
+    }).join('');
+    workBlock = `<div class="ab-card">
+      <div class="ab-card-title">작품별 평균 제작일수 (완료 회차 · 오래 걸린 순)</div>
+      <div class="pi-list">${rows}</div>
+    </div>`;
+  }
+
+  return summary + `<div class="pi-grid">${stageBlock}${workBlock}</div>`;
 }
 
 function workerWorkdayStatsHTML() {
@@ -1260,6 +1432,9 @@ function renderAdminView() {
         </div>
       </div>
     </div>
+
+    <div class="ab-section-title" style="margin-top:24px">📊 제작 일정 인사이트</div>
+    ${productionInsightsHTML()}
 
     <div id="ab-sec-onair" class="ab-section-title">📺 연재중 <span style="color:var(--text2)">· ${onAirList.length}</span></div>
     ${workTableHTML(onAirList, ['작품','담당자','현재 작업','이번 회차 일정','진행도'], {showCurrent:true, showSched:true, showProgress:true})}
