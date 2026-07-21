@@ -769,6 +769,13 @@ async function loadAll() {
   if (worksRes.error)    console.error('works',    worksRes.error);
   if (episodesRes.error) console.error('episodes', episodesRes.error);
 
+  // 조회가 하나라도 실패하면 중단한다.
+  // 빈 배열([])로 폴백하면 '데이터 없음'으로 오인해 시드가 재삽입되고,
+  // 그 결과 두비서·스캔들·천뮤생·엘그린·맞불결혼·장롱괴물 6개가 중복 생성된다.
+  if (workersRes.error || worksRes.error || episodesRes.error) {
+    throw workersRes.error || worksRes.error || episodesRes.error;
+  }
+
   state.workers = (workersRes.data || []).map(w => ({
     id: w.id, name: w.name, color: w.color, isSup: w.is_sup,
     subrole: w.subrole || '', sortOrder: w.sort_order,
@@ -2123,6 +2130,15 @@ document.querySelectorAll('.modal-overlay').forEach(overlay =>
 
 // DB가 비어있을 때 시드 데이터 자동 삽입
 async function seedDatabase() {
+  // 안전장치: 삽입 직전 실제 작품 수를 다시 확인해, 데이터가 있으면 시드하지 않는다.
+  // (일시적 조회 실패 등으로 빈 상태로 오인했을 때 중복 작품이 생기는 것을 방지)
+  const check = await supabase.from('works').select('id', { count: 'exact', head: true });
+  if (check.error) throw check.error;
+  if ((check.count || 0) > 0) {
+    console.warn('[dashboard] 작품이 이미 존재하여 시드를 건너뜁니다. (count=' + check.count + ')');
+    return;
+  }
+
   const seedWorkers = [
     {id:'LCE', name:'이채은',   color:'#ffd166', is_sup:true,  subrole:'각색및총괄', sort_order:1},
     {id:'BJI', name:'배종일',   color:'#4ecdc4', is_sup:true,  subrole:'영상총괄',   sort_order:2},
