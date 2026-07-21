@@ -2159,8 +2159,9 @@ async function seedDatabase() {
   ];
   const r1 = await supabase.from('workers').upsert(seedWorkers);
   if (r1.error) throw r1.error;
-  // 트리거가 자동으로 회차를 생성합니다
-  const r2 = await supabase.from('works').insert(seedWorks);
+  // 트리거가 자동으로 회차를 생성합니다.
+  // works.title UNIQUE 제약과 맞물려, 같은 제목이 있으면 조용히 건너뛴다(중복 방지).
+  const r2 = await supabase.from('works').upsert(seedWorks, { onConflict: 'title', ignoreDuplicates: true });
   if (r2.error) throw r2.error;
   console.log('[dashboard] 시드 데이터 삽입 완료');
 }
