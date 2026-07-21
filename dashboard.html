@@ -88,6 +88,11 @@
   .ep-table tr:hover td{background:var(--surface2);}
   .ep-table tr.this-week td{background:rgba(108,99,255,.1);}
   .ep-table tr.this-week td:first-child{border-left:3px solid var(--accent);}
+  .ep-table td.ep-memo-cell{color:var(--text2);font-size:11px;max-width:150px;}
+  .ep-memo-inner{max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ep-memo-ph{color:var(--text2);opacity:.6;font-style:italic;}
+  .ep-memo-link{font-size:14px;text-decoration:none;cursor:pointer;line-height:1;}
+  a.ep-memo-link:hover{opacity:.7;}
   .ep-pager{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 10px;border-top:1px solid var(--border);}
   .ep-pg-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;}
   .ep-pg-btn:hover:not(:disabled){background:var(--border);}
@@ -112,6 +117,10 @@
 
   /* ── Weekly timeline (day-based) ── */
   /* ── 관리자용 보드 ── */
+  .ab-subtabs{display:inline-flex;gap:3px;padding:3px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;margin-bottom:18px;}
+  .ab-subtab{padding:6px 16px;border:none;background:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:var(--text2);transition:all .15s;}
+  .ab-subtab:hover{color:var(--text);}
+  .ab-subtab.active{background:var(--accent);color:#fff;}
   .ab-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:16px;}
   .ab-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;}
   .ab-card-title{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:12px;}
@@ -412,7 +421,7 @@
         <div class="leg"><div class="legdot" style="background:#ffd166"></div>영상초안작업</div>
         <div class="leg"><div class="legdot" style="background:#ff9fb5"></div>피드백 수정중</div>
         <div class="leg"><div class="legdot" style="background:#c084fc"></div>마무리 작업중</div>
-        <div class="leg"><div class="legdot" style="background:#43d98a"></div>완료</div>
+        <div class="leg"><div class="legdot" style="background:#43d98a"></div>완료 및 업로드</div>
         <div class="leg"><div class="legdot" style="background:var(--orange)"></div>컨펌 필요 (100% 완료 시)</div>
       </div>
     </div>
@@ -575,7 +584,7 @@
 
 <script>
 // ── 상수 ────────────────────────────────────────────────────
-const STAGES       = ['미시작','각색 완료','영상 추출 중','영상초안작업','피드백 수정중','마무리 작업중','완료'];
+const STAGES       = ['미시작','각색 완료','영상 추출 중','영상초안작업','피드백 수정중','마무리 작업중','완료 및 업로드'];
 const STAGE_CLS    = ['s0','s1','s2','s3','s4','s5','s6'];
 const STAGE_COLORS = ['#555','#a0a0c0','#7ec8e3','#ffd166','#ff9fb5','#c084fc','#43d98a'];
 const PROG_STAGES  = [3, 4, 5]; // 영상초안작업, 피드백 수정중, 마무리 작업중 (진행률 표시)
@@ -744,9 +753,10 @@ let state = {
   editingWorkId: null,
   editingEpKey: null,
   epPage: {},          // workId → 현재 회차 페이지 (0-based)
+  adminSubTab: 'schedule',  // 관리자 보드 서브탭: 'schedule'(작업자·제작일정) | 'works'(작품)
 };
 
-const EP_PAGE_SIZE = 15;   // 카드당 표시할 최대 회차 수
+const EP_PAGE_SIZE = 10;   // 카드당 표시할 최대 회차 수
 
 // ── DB ↔ state 매핑 ─────────────────────────────────────────
 async function loadAll() {
@@ -1114,12 +1124,26 @@ function workCardHTML(w) {
       ? `<span class="estage confirm-needed" style="margin-left:4px">컨펌 필요</span>` : '';
     const ackBadge = ep.ack
       ? `<span class="estage ack-badge ack-${ep.ack.kind}" style="margin-left:4px">✓ ${ep.ack.label}</span>` : '';
+    // 메모 셀: 메모가 있으면 링크 아이콘만 표시(레이아웃 보호),
+    // 완료 및 업로드(stage 6) 회차이고 비어 있으면 링크 입력 안내를 표시
+    let memoCell;
+    if (ep.memo) {
+      const memoTitle = String(ep.memo).replace(/"/g, '&quot;');
+      const isUrl = /^(https?:\/\/|www\.)/i.test(ep.memo.trim());
+      memoCell = isUrl
+        ? `<td class="ep-memo-cell"><a class="ep-memo-link" href="${memoHref(ep.memo)}" target="_blank" rel="noopener" title="${memoTitle}" onclick="event.stopPropagation()">🔗</a></td>`
+        : `<td class="ep-memo-cell"><span class="ep-memo-link" title="${memoTitle}">🔗</span></td>`;
+    } else if (ep.stage === 6) {
+      memoCell = `<td class="ep-memo-cell"><div class="ep-memo-inner ep-memo-ph">링크를 입력하세요</div></td>`;
+    } else {
+      memoCell = `<td class="ep-memo-cell"></td>`;
+    }
     return `<tr class="${isThisWeek?'this-week':''}" onclick="openEditEpisode(${w.id},${ep.ep})" style="cursor:pointer">
       <td>${ep.ep}화${isThisWeek ? ' <span style="color:var(--accent);font-size:9px">이번 주</span>' : ''}</td>
       <td class="ep-sched" onclick="event.stopPropagation();openEditSchedule(${w.id},${ep.ep})" style="color:var(--text2);font-size:11px;cursor:pointer">${fmtRange(ep.startDate, ep.endDate)}</td>
       <td><span class="estage ${STAGE_CLS[ep.stage]}">${STAGES[ep.stage]}</span>${confirmBadge}${ackBadge}</td>
       <td>${progHTML}</td>
-      <td style="color:var(--text2);font-size:11px">${ep.memo||''}</td>
+      ${memoCell}
     </tr>`;
   }).join('');
 
@@ -1154,6 +1178,13 @@ function workCardHTML(w) {
     </div>
     ${bodyHTML}
   </div>`;
+}
+
+// 메모가 URL이면 http(s) 스킴을 보장한 href 반환
+function memoHref(memo) {
+  const t = memo.trim();
+  const url = /^https?:\/\//i.test(t) ? t : 'https://' + t;
+  return url.replace(/"/g, '%22');
 }
 
 // 회차 페이지 전환 (작품 카드별)
@@ -1406,9 +1437,10 @@ function renderAdminView() {
   // 일정 지연: 원래 종료일이 지났는데 미완료인 회차, 지연 일수 큰 순
   const delays = getDelayedItems().sort((a, b) => b.delay - a.delay);
 
-  let html = `
-    <h2 style="font-size:18px;font-weight:700;margin-bottom:14px;">관리자용 보드</h2>
+  const sub = state.adminSubTab || 'schedule';
 
+  // ── 작품 탭: 현황 요약 + 진행률 + 작품 목록(연재중·대기중·완료·담당자 미정) ──
+  const worksTab = `
     <div class="ab-grid">
       <div class="ab-card">
         <div class="ab-card-title">전체 작품 현황 (총 ${totalWorks}개)</div>
@@ -1433,9 +1465,6 @@ function renderAdminView() {
       </div>
     </div>
 
-    <div class="ab-section-title" style="margin-top:24px">📊 제작 일정 인사이트</div>
-    ${productionInsightsHTML()}
-
     <div id="ab-sec-onair" class="ab-section-title">📺 연재중 <span style="color:var(--text2)">· ${onAirList.length}</span></div>
     ${workTableHTML(onAirList, ['작품','담당자','현재 작업','이번 회차 일정','진행도'], {showCurrent:true, showSched:true, showProgress:true})}
 
@@ -1447,31 +1476,47 @@ function renderAdminView() {
 
     <div id="ab-sec-noworker" class="ab-section-title">👤 담당자 미정 <span style="color:var(--text2)">· ${noWorkerList.length}</span></div>
     ${workTableHTML(noWorkerList, ['작품','담당자','전처리 단계'], {showPhase:true})}
-
-    <div class="ab-section-title">⚠️ 일정 지연 ${delays.length > 0 ? `<span style="color:#ff6584">· ${delays.length}건</span>` : ''}</div>
   `;
 
-  if (delays.length === 0) {
-    html += `<div class="ab-empty">지연된 일정이 없습니다.</div>`;
-  } else {
-    html += `<div class="ab-list">`;
-    delays.forEach(d => {
-      html += `<div class="ab-delay-row overdue" onclick="openEditEpisode(${d.workId},${d.ep})">
-        <div>
-          <span class="ab-delay-title">${d.workTitle}</span>
-          <span class="ab-delay-ep">${d.ep}화</span>
-        </div>
-        <div class="ab-delay-dates">마감 ${fmtRange(d.endDate, d.endDate)} · 현재 ${STAGES[d.stage]}</div>
-        <div class="ab-delay-days overdue">🔴 ${d.delay}일 초과</div>
-      </div>`;
-    });
-    html += `</div>`;
-  }
+  // ── 작업자(제작일정) 탭: 인사이트 + 일정 지연 + 작업자별 완료 회차 작업일 ──
+  const delayHTML = delays.length === 0
+    ? `<div class="ab-empty">지연된 일정이 없습니다.</div>`
+    : `<div class="ab-list">${delays.map(d => `
+        <div class="ab-delay-row overdue" onclick="openEditEpisode(${d.workId},${d.ep})">
+          <div>
+            <span class="ab-delay-title">${d.workTitle}</span>
+            <span class="ab-delay-ep">${d.ep}화</span>
+          </div>
+          <div class="ab-delay-dates">마감 ${fmtRange(d.endDate, d.endDate)} · 현재 ${STAGES[d.stage]}</div>
+          <div class="ab-delay-days overdue">🔴 ${d.delay}일 초과</div>
+        </div>`).join('')}</div>`;
 
-  html += `<div class="ab-section-title" style="margin-top:28px">📊 작업자별 완료 회차 작업일</div>`;
-  html += workerWorkdayStatsHTML();
+  const scheduleTab = `
+    <div class="ab-section-title" style="margin-top:8px">📊 제작 일정 인사이트</div>
+    ${productionInsightsHTML()}
+
+    <div class="ab-section-title">⚠️ 일정 지연 ${delays.length > 0 ? `<span style="color:#ff6584">· ${delays.length}건</span>` : ''}</div>
+    ${delayHTML}
+
+    <div class="ab-section-title" style="margin-top:28px">📊 작업자별 완료 회차 작업일</div>
+    ${workerWorkdayStatsHTML()}
+  `;
+
+  const html = `
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:14px;">관리자용 보드</h2>
+    <div class="ab-subtabs">
+      <button class="ab-subtab${sub==='schedule'?' active':''}" onclick="setAdminSubTab('schedule')">🗓️ 작업자 (제작일정)</button>
+      <button class="ab-subtab${sub==='works'?' active':''}" onclick="setAdminSubTab('works')">📚 작품</button>
+    </div>
+    ${sub === 'works' ? worksTab : scheduleTab}
+  `;
 
   document.getElementById('view-admin').innerHTML = html;
+}
+
+function setAdminSubTab(t) {
+  state.adminSubTab = t;
+  renderAdminView();
 }
 
 function scrollToAdminSection(key) {
@@ -1793,12 +1838,19 @@ function openEditEpisode(workId, epNum) {
   document.getElementById('prog-slider').value = ep.progress;
   document.getElementById('prog-n').textContent = ep.progress + '%';
   document.getElementById('ep-memo').value = ep.memo || '';
+  updateMemoPlaceholder(ep.stage);
   document.getElementById('modal-ep').classList.add('open');
+}
+
+// '완료 및 업로드'(stage 6) 회차는 메모 란에 링크 입력을 안내
+function updateMemoPlaceholder(stage) {
+  document.getElementById('ep-memo').placeholder = stage === 6 ? '링크를 입력하세요' : '특이사항 등';
 }
 
 function selStage(i) {
   document.querySelectorAll('.stbtn').forEach((b,idx)=>b.classList.toggle('sel',idx===i));
   document.getElementById('prog-group').style.display = PROG_STAGES.includes(i) ? 'block' : 'none';
+  updateMemoPlaceholder(i);
 }
 
 function getSelStage() {
