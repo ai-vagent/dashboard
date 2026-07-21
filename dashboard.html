@@ -506,7 +506,7 @@
           <div class="prog-n" id="prog-n">0%</div>
         </div>
       </div>
-      <div class="fg"><label class="fl">메모</label><input class="fi" id="ep-memo" placeholder="특이사항 등"></div>
+      <div class="fg"><label class="fl">링크</label><input class="fi" id="ep-memo" placeholder="특이사항 등"></div>
       <div class="btn-row">
         <button class="btn btn-s" onclick="closeModal('modal-ep')">취소</button>
         <button class="btn btn-p" id="btn-save-ep" onclick="saveEpisode()">저장</button>
@@ -1160,7 +1160,7 @@ function workCardHTML(w) {
   const isPreDone = w.prePhase === 3;
   const bodyHTML = isPreDone
     ? `<table class="ep-table">
-        <thead><tr><th>회차</th><th>일정</th><th>단계</th><th>진행률</th><th>메모</th></tr></thead>
+        <thead><tr><th>회차</th><th>일정</th><th>단계</th><th>진행률</th><th>링크</th></tr></thead>
         <tbody>${epRows}</tbody>
       </table>${pagerHTML}`
     : `<div class="pre-phases">${phaseSteps}</div>`;
