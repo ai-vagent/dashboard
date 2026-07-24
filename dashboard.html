@@ -1516,6 +1516,20 @@ function renderAdminView() {
       <button class="ab-subtab${sub==='works'?' active':''}" onclick="setAdminSubTab('works')">📚 작품</button>
     </div>
     ${sub === 'works' ? worksTab : scheduleTab}
+
+    <div class="ab-section-title" style="margin-top:32px">💾 데이터 백업 / 복원</div>
+    <div class="ab-card" style="display:block">
+      <p style="color:var(--text2);font-size:13px;line-height:1.7;margin-bottom:14px;">
+        모든 작업자·작품·회차 데이터를 파일로 내려받아 보관하세요.
+        Supabase 무료 플랜은 자동 백업이 없으므로, <b>정기적으로(예: 주 1회) 백업</b>해 두시길 권장합니다.
+        사고로 데이터가 지워져도 이 파일로 되돌릴 수 있습니다.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-p" onclick="exportBackup()">⬇ 백업 내려받기 (JSON)</button>
+        <button class="btn btn-s" onclick="document.getElementById('backup-file').click()">⬆ 백업 파일로 복원</button>
+        <input type="file" id="backup-file" accept="application/json,.json" style="display:none" onchange="importBackup(event)">
+      </div>
+    </div>
   `;
 
   document.getElementById('view-admin').innerHTML = html;
@@ -1524,6 +1538,114 @@ function renderAdminView() {
 function setAdminSubTab(t) {
   state.adminSubTab = t;
   renderAdminView();
+}
+
+// ── 데이터 백업 / 복원 ────────────────────────────────────────
+// 전체 데이터를 원본 컬럼 그대로 JSON 파일로 내려받는다.
+async function exportBackup() {
+  const [workers, works, episodes] = await Promise.all([
+    supabase.from('workers').select('*').order('sort_order'),
+    supabase.from('works').select('*').order('id'),
+    supabase.from('episodes').select('*').order('work_id').order('ep_num'),
+  ]);
+  if (dbErr('백업 조회', workers.error || works.error || episodes.error)) return;
+
+  const backup = {
+    _meta: { app: 'anim-dashboard', version: 1, exportedAt: new Date().toISOString() },
+    workers: workers.data || [],
+    works:    works.data || [],
+    episodes: episodes.data || [],
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const ts   = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `dashboard-backup-${ts}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// 백업 파일을 읽어 현재 DB에 병합/복원한다.
+//  - 작품은 제목(title, UNIQUE)을 자연키로 upsert → id는 DB가 관리하므로 시퀀스 충돌 없음
+//  - 회차는 (work_id, ep_num)을 키로 upsert → 백업 값으로 덮어씀
+//  - 현재 데이터를 삭제하지는 않는다 (안전 우선). 같은 항목만 백업 값으로 덮어쓴다.
+async function importBackup(event) {
+  const file = event.target.files[0];
+  event.target.value = '';           // 같은 파일 재선택 가능하도록 초기화
+  if (!file) return;
+
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    alert('백업 파일을 읽을 수 없습니다 (JSON 형식 오류).');
+    return;
+  }
+  if (!data || !Array.isArray(data.works) || !Array.isArray(data.episodes)) {
+    alert('올바른 백업 파일이 아닙니다.');
+    return;
+  }
+
+  const ok = confirm(
+    `백업 파일 내용을 현재 데이터에 복원합니다.\n\n` +
+    `· 작업자 ${(data.workers || []).length}명\n` +
+    `· 작품 ${data.works.length}개\n` +
+    `· 회차 ${data.episodes.length}개\n\n` +
+    `같은 제목의 작품·같은 회차는 백업 값으로 덮어써집니다.\n` +
+    `(현재 데이터가 삭제되지는 않습니다.)\n\n계속하시겠습니까?`
+  );
+  if (!ok) return;
+
+  // 1) 작업자 복원 (id 기준)
+  if (Array.isArray(data.workers) && data.workers.length) {
+    const rows = data.workers.map(w => ({
+      id: w.id, name: w.name, color: w.color,
+      is_sup: w.is_sup, subrole: w.subrole || '', sort_order: w.sort_order,
+    }));
+    const r = await supabase.from('workers').upsert(rows, { onConflict: 'id' });
+    if (dbErr('작업자 복원', r.error)) return;
+  }
+
+  // 2) 작품 복원 (title 기준 — id는 DB가 부여)
+  const worksIn = data.works.map(w => ({
+    title: w.title, worker: w.worker || null, start_month: w.start_month,
+    total_ep: w.total_ep, pre_phase: w.pre_phase, ep_days: w.ep_days,
+  }));
+  const wr = await supabase.from('works').upsert(worksIn, { onConflict: 'title' });
+  if (dbErr('작품 복원', wr.error)) return;
+
+  // 백업의 work_id → 현재 work_id 매핑 (제목 경유)
+  const allW = await supabase.from('works').select('id,title');
+  if (dbErr('작품 조회', allW.error)) return;
+  const titleToId  = {};
+  (allW.data || []).forEach(w => { titleToId[w.title] = w.id; });
+  const oldIdToTitle = {};
+  data.works.forEach(w => { oldIdToTitle[w.id] = w.title; });
+
+  // 3) 회차 복원 (work_id 재매핑 + (work_id, ep_num) 기준 덮어쓰기)
+  const epsIn = data.episodes.map(e => {
+    const newWorkId = titleToId[oldIdToTitle[e.work_id]];
+    if (!newWorkId) return null;
+    return {
+      work_id: newWorkId, ep_num: e.ep_num,
+      start_date: e.start_date, end_date: e.end_date,
+      original_start_date: e.original_start_date, original_end_date: e.original_end_date,
+      stage: e.stage, progress: e.progress, memo: e.memo || '',
+      ack_kind: e.ack_kind ?? null, ack_label: e.ack_label ?? null,
+    };
+  }).filter(Boolean);
+
+  if (epsIn.length) {
+    const er = await supabase.from('episodes').upsert(epsIn, { onConflict: 'work_id,ep_num' });
+    if (dbErr('회차 복원', er.error)) return;
+  }
+
+  alert('복원이 완료되었습니다.');
+  await loadAll();
+  render();
 }
 
 function scrollToAdminSection(key) {
@@ -1756,6 +1878,64 @@ function openEditWork(id) {
   document.getElementById('modal-work').classList.add('open');
 }
 
+// ── 회차 일정 재조정 ──────────────────────────────────────────
+// 회차 수·시작 월·작업일이 바뀌었을 때 호출한다.
+// 핵심 원칙: 기존 회차의 작업 기록(stage/progress/memo/링크/컨펌=ack)은 그대로 두고,
+//           날짜와 회차 개수만 새 설정에 맞춰 조정한다. (전체 삭제·재생성 금지)
+//   - 회차 수 증가  → 늘어난 회차만 새로 삽입
+//   - 회차 수 감소  → 초과분(ep_num > totalEp)만 삭제 (호출 전 confirm으로 안내됨)
+//   - 시작 월/작업일 변경 → 이미 시작된(stage>0) 회차의 날짜는 보존, 미시작 회차만 재계산
+// 성공하면 true, DB 오류로 중단되면 false를 반환한다.
+async function reconcileSchedule(w, { totalEp, startMonth, epDays }) {
+  // 1) 회차 수가 줄면 초과 회차만 삭제한다.
+  if (totalEp < w.totalEp) {
+    const del = await supabase.from('episodes')
+      .delete().eq('work_id', w.id).gt('ep_num', totalEp);
+    if (dbErr('초과 회차 삭제', del.error)) return false;
+  }
+
+  const existing = new Map(w.episodes.map(e => [e.ep, e]));
+
+  // 2) 시작 월요일에서부터 커서를 두고 1..totalEp 순서대로 날짜를 계산한다.
+  const baseWk    = MONTH_FIRST_WEEK[startMonth] ?? 0;
+  const cursorDate = new Date(WEEK_ORIGIN);
+  cursorDate.setDate(cursorDate.getDate() + baseWk * 7);
+  let cursor = fmtDate(cursorDate);
+
+  for (let ep = 1; ep <= totalEp; ep++) {
+    const cur = existing.get(ep);
+
+    // 이미 시작된 회차: 날짜·기록을 건드리지 않고, 커서만 그 종료일 다음 영업일로 이동
+    if (cur && cur.stage > 0) {
+      cursor = addBusinessDays(cur.endDate, 1);
+      continue;
+    }
+
+    const startStr = cursor;
+    const endStr   = addBusinessDays(startStr, epDays - 1);
+
+    if (cur) {
+      // 미시작 기존 회차: 날짜만 갱신 (stage/progress/memo/ack는 update 대상이 아니므로 보존)
+      const r = await supabase.from('episodes').update({
+        start_date: startStr, end_date: endStr,
+        original_start_date: startStr, original_end_date: endStr,
+      }).eq('work_id', w.id).eq('ep_num', ep);
+      if (dbErr('회차 일정 조정', r.error)) return false;
+    } else {
+      // 새로 늘어난 회차: 신규 삽입
+      const r = await supabase.from('episodes').insert({
+        work_id: w.id, ep_num: ep,
+        start_date: startStr, end_date: endStr,
+        original_start_date: startStr, original_end_date: endStr,
+        stage: 0, progress: 0, memo: '',
+      });
+      if (dbErr('회차 추가', r.error)) return false;
+    }
+    cursor = addBusinessDays(endStr, 1);
+  }
+  return true;
+}
+
 async function saveWork() {
   const btn = document.getElementById('btn-save-work');
   if (btn.disabled) return;
@@ -1771,13 +1951,22 @@ async function saveWork() {
 
     if (state.editingWorkId) {
       const w = state.works.find(x => x.id === state.editingWorkId);
-      const scheduleChanged = w.totalEp !== totalEp || w.startMonth !== startMonth;
-      const daysChanged     = w.epDays !== epDays;
+      // 일정 관련 항목(회차 수·시작 월·작업일)이 하나라도 바뀌면 회차 일정을 '재조정'한다.
+      // ⚠️ 절대 전체 삭제/재생성하지 않는다 — 기존 회차의 작업 기록
+      //    (stage·progress·memo·링크·컨펌 등)을 반드시 보존해야 한다.
+      const scheduleChanged =
+        w.totalEp !== totalEp || w.startMonth !== startMonth || w.epDays !== epDays;
 
-      // 총 회차 수 · 시작 월 변경 → 전체 회차 삭제 후 재생성
-      if (scheduleChanged) {
-        const r = await supabase.from('episodes').delete().eq('work_id', w.id);
-        if (dbErr('회차 초기화', r.error)) return;
+      // 회차 수를 줄일 때, 작업 기록이 있는 회차가 삭제될 상황이면 먼저 확인받는다.
+      if (totalEp < w.totalEp) {
+        const losing = w.episodes.filter(
+          e => e.ep > totalEp && (e.stage > 0 || (e.memo && e.memo.trim()) || e.ack)
+        );
+        if (losing.length && !confirm(
+          `회차 수를 ${w.totalEp}화 → ${totalEp}화로 줄이면 작업 기록이 있는 ` +
+          `${losing.length}개 회차(${losing.map(e => e.ep + '화').join(', ')})가 삭제됩니다.\n` +
+          `이 회차들의 기록은 복구할 수 없습니다. 계속하시겠습니까?`
+        )) return;
       }
 
       const upd = await supabase.from('works').update({
@@ -1786,28 +1975,8 @@ async function saveWork() {
       if (dbErr('작품 수정', upd.error)) return;
 
       if (scheduleChanged) {
-        // generate_episodes_for_work가 w.ep_days를 읽으므로 새 epDays도 함께 반영됨
-        const rpc = await supabase.rpc('generate_episodes_for_work', { p_work_id: w.id });
-        if (dbErr('회차 생성', rpc.error)) return;
-      } else if (daysChanged) {
-        // ep_days만 변경 → 미시작(stage===0) 회차의 날짜만 순서대로 재계산
-        const allEps = [...w.episodes].sort((a, b) => a.ep - b.ep);
-        let cursor = null;
-        for (const ep of allEps) {
-          if (ep.stage > 0) {
-            // 시작된 회차는 건드리지 않고, 그 종료일 다음 영업일로 커서 이동
-            cursor = addBusinessDays(ep.endDate, 1);
-            continue;
-          }
-          const newStart = cursor ?? ep.startDate;
-          const newEnd   = addBusinessDays(newStart, epDays - 1);
-          const r = await supabase.from('episodes').update({
-            start_date: newStart, end_date: newEnd,
-            original_start_date: newStart, original_end_date: newEnd,
-          }).eq('work_id', w.id).eq('ep_num', ep.ep);
-          if (dbErr('회차 작업일 변경', r.error)) return;
-          cursor = addBusinessDays(newEnd, 1);
-        }
+        const ok = await reconcileSchedule(w, { totalEp, startMonth, epDays });
+        if (!ok) return;
       }
     } else {
       // 새 작품 — 트리거가 자동으로 회차 생성
