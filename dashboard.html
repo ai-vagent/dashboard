@@ -240,6 +240,9 @@
   .tl-mode-toggle{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:2px;}
   .tl-mode-btn{background:none;border:none;color:var(--text2);font-size:12px;font-weight:600;padding:5px 16px;border-radius:6px;cursor:pointer;transition:all .15s;}
   .tl-mode-btn.active{background:var(--accent);color:#fff;}
+  .tl-zoom{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:600;color:var(--text2);}
+  .tl-zoom input[type=range]{width:140px;accent-color:var(--accent);}
+  .tl-zoom-val{min-width:38px;text-align:right;font-variant-numeric:tabular-nums;}
   .tl-month-nav{display:flex;align-items:center;gap:4px;}
   .tl-month-lbl{font-size:14px;font-weight:700;min-width:100px;text-align:center;}
   .tl-today-btn{margin-left:6px;padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;}
@@ -474,6 +477,11 @@
         <div class="tl-mode-toggle">
           <button class="tl-mode-btn active" id="tl-mode-week"  onclick="setTlMode('week')">주간</button>
           <button class="tl-mode-btn"        id="tl-mode-month" onclick="setTlMode('month')">월간</button>
+        </div>
+        <div class="tl-zoom" id="tl-zoom">
+          <span>가로 크기</span>
+          <input type="range" id="tl-zoom-range" min="14" max="64" step="2" value="26" oninput="setTlColW(this.value)">
+          <span class="tl-zoom-val" id="tl-zoom-val">26px</span>
         </div>
         <div class="tl-month-nav" id="tl-month-nav" style="display:none">
           <button class="cal-arrow" onclick="tlMonthMove(-1)">‹</button>
@@ -796,6 +804,7 @@ let state = {
   adminSubTab: 'schedule',  // 관리자 보드 서브탭: 'schedule'(작업자·제작일정) | 'works'(작품)
   tlMode: 'week',      // 타임라인 보기: 'week'(주간 간트) | 'month'(월간 캘린더)
   tlMonth: null,       // 월간 캘린더에서 보고 있는 달 {y, m} — null이면 오늘 기준
+  tlColW: 26,          // 주간 타임라인 하루 컬럼 너비(px) — 슬라이더로 조절
 };
 
 const EP_PAGE_SIZE = 10;   // 카드당 표시할 최대 회차 수
@@ -1702,6 +1711,11 @@ function renderTimelineView() {
   document.getElementById('tl-mode-week').classList.toggle('active', !isMonth);
   document.getElementById('tl-mode-month').classList.toggle('active', isMonth);
   document.getElementById('tl-month-nav').style.display = isMonth ? 'flex' : 'none';
+  document.getElementById('tl-zoom').style.display      = isMonth ? 'none' : 'flex';
+  if (!isMonth) {
+    document.getElementById('tl-zoom-range').value = state.tlColW;
+    document.getElementById('tl-zoom-val').textContent = `${state.tlColW}px`;
+  }
   if (isMonth) renderMonthlyView();
   else renderWeeklyTimeline();
 }
@@ -1709,6 +1723,16 @@ function renderTimelineView() {
 function setTlMode(mode) {
   state.tlMode = mode;
   renderTimelineView();
+}
+
+// 주간 타임라인 하루 컬럼 너비 조절 (스크롤 위치는 비율 유지)
+function setTlColW(v) {
+  const scroll = document.getElementById('tl-scroll');
+  const ratio  = scroll.scrollLeft / (state.tlColW || 26);
+  state.tlColW = +v;
+  document.getElementById('tl-zoom-val').textContent = `${v}px`;
+  renderWeeklyTimeline(false);
+  scroll.scrollLeft = ratio * state.tlColW;
 }
 
 // ── 월간 캘린더 ──────────────────────────────────────────────
@@ -1835,7 +1859,7 @@ function renderMonthlyView() {
 }
 
 // ── 주간 타임라인 (캘린더 위에 간트 막대) ───────────────────────
-function renderWeeklyTimeline() {
+function renderWeeklyTimeline(autoScroll = true) {
   const cw = state.currentWorker;
   const works = (cw === 'all') ? state.works : state.works.filter(x => x.worker === cw);
 
@@ -1843,7 +1867,7 @@ function renderWeeklyTimeline() {
   const showConfirm  = cw === 'all' || isSup(cw);
   const sups         = state.workers.filter(w => w.isSup);
 
-  const COL_W      = 26;
+  const COL_W      = state.tlColW || 26;
   const ROW_H      = 52;
   const LANE_H     = 24;
   const totalCols  = TOTAL_WEEKS * 5;
@@ -1953,25 +1977,42 @@ function renderWeeklyTimeline() {
     if (!workerWorks.length) return;
 
     workerWorks.forEach(w => {
-      html += `<div class="tl-row" style="min-height:${ROW_H}px">
+      // 기간이 겹치는 회차(같은 날 마감·시작, 일정 중복 등)는 줄을 나눠 표시
+      const segs = [];
+      w.episodes.forEach(ep => {
+        if (!ep.startDate || !ep.endDate) return;
+        const sCol = dateToCol(ep.startDate);
+        const eCol = Math.max(dateToCol(ep.endDate), sCol);
+        segs.push({ ep, sCol, eCol, lane: 0 });
+      });
+      segs.sort((a, b) => a.sCol - b.sCol || a.eCol - b.eCol);
+      const lanes = [];   // 각 lane의 마지막 eCol
+      segs.forEach(sg => {
+        let placed = false;
+        for (let i = 0; i < lanes.length; i++) {
+          if (lanes[i] < sg.sCol) { sg.lane = i; lanes[i] = sg.eCol; placed = true; break; }
+        }
+        if (!placed) { sg.lane = lanes.length; lanes.push(sg.eCol); }
+      });
+      const EP_BAR_H = ROW_H - 12;
+      const rowH = Math.max(ROW_H, 6 + lanes.length * (EP_BAR_H + 6));
+
+      html += `<div class="tl-row" style="min-height:${rowH}px">
         <div class="tl-side">
           <div class="tl-row-label">${w.title}</div>
           <div class="tl-row-sub">${group.label}</div>
         </div>
-        <div class="tl-track" style="width:${trackW}px;height:${ROW_H}px">
+        <div class="tl-track" style="width:${trackW}px;height:${rowH}px">
           ${bgGrid}${todayLineHTML}`;
 
-      w.episodes.forEach(ep => {
-        if (!ep.startDate || !ep.endDate) return;
-        const sCol = dateToCol(ep.startDate);
-        const eCol = dateToCol(ep.endDate);
+      segs.forEach(({ ep, sCol, eCol, lane }) => {
         const left = sCol * COL_W + 2;
         const width = Math.max(COL_W - 4, (eCol - sCol + 1) * COL_W - 4);
         const sc   = STAGE_COLORS[ep.stage];
         const isConfirm = isConfirmNeeded(ep);
         const pctTxt = ep.progress > 0 ? ` ${ep.progress}%` : '';
         html += `<div class="tl-bar${isConfirm?' is-confirm':''}"
-          style="left:${left}px;width:${width}px;top:6px;bottom:6px;background:${sc}cc;"
+          style="left:${left}px;width:${width}px;top:${6 + lane * (EP_BAR_H + 6)}px;height:${EP_BAR_H}px;background:${sc}cc;"
           onclick="openEditEpisode(${w.id},${ep.ep})"
           title="${ep.ep}화 · ${STAGES[ep.stage]}${pctTxt} · ${fmtRange(ep.startDate, ep.endDate)}">
           <div class="tl-bar-ep">${ep.ep}화${isConfirm?' 🔔':''}</div>
@@ -1986,9 +2027,11 @@ function renderWeeklyTimeline() {
   html += `</div>`;
   document.getElementById('timeline-container').innerHTML = html;
 
-  // 이번 주로 자동 스크롤
-  const scroll = document.getElementById('tl-scroll');
-  scroll.scrollLeft = Math.max(0, curWeekI * 5 * COL_W - 60);
+  // 이번 주로 자동 스크롤 (가로 크기 조절 중에는 스크롤 위치를 호출부에서 유지)
+  if (autoScroll) {
+    const scroll = document.getElementById('tl-scroll');
+    scroll.scrollLeft = Math.max(0, curWeekI * 5 * COL_W - 60);
+  }
 }
 
 // ── Tab / Filter ─────────────────────────────────────────────
