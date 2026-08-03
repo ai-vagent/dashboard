@@ -510,6 +510,10 @@
         <div class="fg"><label class="fl">작품명</label><input class="fi" id="inp-title" placeholder="작품명 입력"></div>
         <div class="fg"><label class="fl">메인 작업자</label><select class="fs" id="inp-worker"></select></div>
       </div>
+      <div class="frow">
+        <div class="fg"><label class="fl">서브 작업자</label><select class="fs" id="inp-subworker"></select></div>
+        <div class="fg"></div>
+      </div>
       <div class="frow" style="grid-template-columns:1fr 1fr 1fr">
         <div class="fg">
           <label class="fl">연재 시작 (월)</label>
@@ -847,6 +851,7 @@ async function loadAll() {
   state.works = (worksRes.data || []).map(w => ({
     id: w.id, title: w.title,
     worker: w.worker || '',
+    subWorker: w.sub_worker || '',
     startMonth: w.start_month, totalEp: w.total_ep, prePhase: w.pre_phase, epDays: w.ep_days ?? 5,
     episodes: (epsByWork[w.id] || []).sort((a,b) => a.ep - b.ep),
   }));
@@ -884,12 +889,17 @@ function wName(id)  { return state.workers.find(w=>w.id===id)?.name  ?? '미정'
 function isSup(id)  { return state.workers.find(w=>w.id===id)?.isSup ?? false; }
 function isConfirmNeeded(ep) { return CONFIRM_STAGES.includes(ep.stage) && ep.progress === 100; }
 
-// 전체 보기면 전체 / 그 외(감독 포함)는 본인 담당 작품만
+// 메인 또는 서브 작업자로 참여 중인지
+function isAssignedTo(work, workerId) {
+  return work.worker === workerId || work.subWorker === workerId;
+}
+
+// 전체 보기면 전체 / 그 외(감독 포함)는 본인 담당 작품만 (메인+서브)
 // 감독은 컨펌 필요 항목을 별도 카드로 추가 노출
 function getWorks() {
   const w = state.currentWorker;
   if (w === 'all') return state.works;
-  return state.works.filter(x => x.worker === w);
+  return state.works.filter(x => isAssignedTo(x, w));
 }
 
 function getFilteredWorks() {
@@ -984,7 +994,7 @@ function renderSidebar() {
     }
     prevWasSup = w.isSup;
 
-    const myWorks = state.works.filter(x => x.worker === w.id);
+    const myWorks = state.works.filter(x => isAssignedTo(x, w.id));
     const subLabel = w.isSup
       ? (myWorks.map(x=>x.title).join(', ') || '–') + ' · 전작품 관여'
       : (myWorks.map(x=>x.title).join(', ') || '담당 없음');
@@ -1017,15 +1027,16 @@ function renderSidebar() {
     }
   });
 
-  // worker select in modal
-  const sel = document.getElementById('inp-worker');
-  if (sel) {
+  // worker select in modal (메인 · 서브 공용)
+  ['inp-worker', 'inp-subworker'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
     const cur = sel.value;
     sel.innerHTML = `<option value="">미정</option>` + state.workers.map(w =>
       `<option value="${w.id}">${w.name}${w.subrole ? ' ('+w.subrole+')' : ''}</option>`
     ).join('');
     if (cur) sel.value = cur;
-  }
+  });
 }
 
 function renderSummary() {
@@ -1227,7 +1238,7 @@ function workCardHTML(w) {
     <div class="wk-header">
       <div>
         <div class="wk-title">${w.title}</div>
-        <div class="wk-meta"><span style="font-weight:600">${wName(w.worker)}</span>${roleTxt} &nbsp;·&nbsp; ${w.startMonth}월 시작 &nbsp;·&nbsp; ${w.totalEp}화 &nbsp;·&nbsp; ${w.epDays}영업일</div>
+        <div class="wk-meta"><span style="font-weight:600">${wName(w.worker)}</span>${roleTxt}${w.subWorker ? ` &nbsp;·&nbsp; 서브 <span style="font-weight:600">${wName(w.subWorker)}</span>` : ''} &nbsp;·&nbsp; ${w.startMonth}월 시작 &nbsp;·&nbsp; ${w.totalEp}화 &nbsp;·&nbsp; ${w.epDays}영업일</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="phase-badge">${PRE_PHASES[w.prePhase]}</span>
@@ -1267,9 +1278,10 @@ function currentEpOf(w) {
 function workRowHTML(w, opts={}) {
   const worker     = state.workers.find(x => x.id === w.worker);
   const workerName = worker ? worker.name : '미정';
+  const subName    = w.subWorker ? wName(w.subWorker) : '';
   const cur        = currentEpOf(w);
   const cells = [`<div class="ab-tw-title" onclick="event.stopPropagation();">${w.title}</div>`];
-  cells.push(`<div class="ab-tw-cell">${workerName}</div>`);
+  cells.push(`<div class="ab-tw-cell">${workerName}${subName ? `<span style="color:var(--text2)"> · ${subName}(서브)</span>` : ''}</div>`);
   if (opts.showCurrent) {
     cells.push(`<div class="ab-tw-cell">${cur ? `${cur.ep}화 · ${STAGES[cur.stage]}` : '–'}</div>`);
   }
@@ -1664,7 +1676,7 @@ async function importBackup(event) {
 
   // 2) 작품 복원 (title 기준 — id는 DB가 부여)
   const worksIn = data.works.map(w => ({
-    title: w.title, worker: w.worker || null, start_month: w.start_month,
+    title: w.title, worker: w.worker || null, sub_worker: w.sub_worker || null, start_month: w.start_month,
     total_ep: w.total_ep, pre_phase: w.pre_phase, ep_days: w.ep_days,
   }));
   const wr = await supabase.from('works').upsert(worksIn, { onConflict: 'title' });
@@ -1768,7 +1780,7 @@ function renderMonthlyView() {
   document.getElementById('tl-month-lbl').textContent = `${year}년 ${month + 1}월`;
 
   const cw = state.currentWorker;
-  const works = (cw === 'all') ? state.works : state.works.filter(x => x.worker === cw);
+  const works = (cw === 'all') ? state.works : state.works.filter(x => isAssignedTo(x, cw));
   const todayStr = fmtDate(new Date());
 
   const BAR_H = 20, BAR_GAP = 4, DATE_H = 28;
@@ -1811,7 +1823,7 @@ function renderMonthlyView() {
           work: w, ep, sCol, eCol,
           contL: ep.startDate < weekStart,   // 지난주에서 이어짐
           contR: ep.endDate   > weekEnd,     // 다음주로 이어짐
-          workerName: worker ? worker.name : '미정',
+          workerName: (worker ? worker.name : '미정') + (w.subWorker ? ` · ${wName(w.subWorker)}(서브)` : ''),
         });
       });
     });
@@ -1861,7 +1873,7 @@ function renderMonthlyView() {
 // ── 주간 타임라인 (캘린더 위에 간트 막대) ───────────────────────
 function renderWeeklyTimeline(autoScroll = true) {
   const cw = state.currentWorker;
-  const works = (cw === 'all') ? state.works : state.works.filter(x => x.worker === cw);
+  const works = (cw === 'all') ? state.works : state.works.filter(x => isAssignedTo(x, cw));
 
   const confirmItems = getConfirmItems();
   const showConfirm  = cw === 'all' || isSup(cw);
@@ -1967,16 +1979,18 @@ function renderWeeklyTimeline(autoScroll = true) {
     <div class="tl-section-fill" style="width:${trackW}px"></div>
   </div>`;
 
-  // 작업자 그룹 + 미정(담당자 없음) 그룹
+  // 작업자 그룹(메인+서브) + 미정(메인 담당자 없음) 그룹
+  // 서브로 참여한 작품은 해당 작업자 그룹에도 '서브' 표기와 함께 표시된다
   const groups = [
-    ...state.workers.map(worker => ({ label: worker.name, list: works.filter(w => w.worker === worker.id) })),
-    { label: '미정', list: works.filter(w => !state.workers.some(wk => wk.id === w.worker)) },
+    ...state.workers.map(worker => ({ label: worker.name, id: worker.id, list: works.filter(w => isAssignedTo(w, worker.id)) })),
+    { label: '미정', id: null, list: works.filter(w => !state.workers.some(wk => wk.id === w.worker)) },
   ];
   groups.forEach(group => {
     const workerWorks = sortWorks(group.list);
     if (!workerWorks.length) return;
 
     workerWorks.forEach(w => {
+      const roleTag = (group.id && w.worker !== group.id && w.subWorker === group.id) ? ' · 서브' : '';
       // 기간이 겹치는 회차(같은 날 마감·시작, 일정 중복 등)는 줄을 나눠 표시
       const segs = [];
       w.episodes.forEach(ep => {
@@ -2000,7 +2014,7 @@ function renderWeeklyTimeline(autoScroll = true) {
       html += `<div class="tl-row" style="min-height:${rowH}px">
         <div class="tl-side">
           <div class="tl-row-label">${w.title}</div>
-          <div class="tl-row-sub">${group.label}</div>
+          <div class="tl-row-sub">${group.label}${roleTag}</div>
         </div>
         <div class="tl-track" style="width:${trackW}px;height:${rowH}px">
           ${bgGrid}${todayLineHTML}`;
@@ -2081,6 +2095,7 @@ function openAddWork() {
   state.editingWorkId = null;
   document.getElementById('inp-title').value = '';
   document.getElementById('inp-worker').value = '';
+  document.getElementById('inp-subworker').value = '';
   document.getElementById('inp-startMonth').value = '5';
   document.getElementById('inp-totalEp').value = '12';
   document.getElementById('inp-epDays').value = '5';
@@ -2095,6 +2110,7 @@ function openEditWork(id) {
   state.editingWorkId = id;
   document.getElementById('inp-title').value = w.title;
   document.getElementById('inp-worker').value = w.worker;
+  document.getElementById('inp-subworker').value = w.subWorker;
   document.getElementById('inp-startMonth').value = w.startMonth;
   document.getElementById('inp-totalEp').value = w.totalEp;
   document.getElementById('inp-epDays').value = w.epDays;
@@ -2169,6 +2185,7 @@ async function saveWork() {
     const title      = document.getElementById('inp-title').value.trim();
     if (!title) { alert('작품명을 입력하세요'); return; }
     const worker     = document.getElementById('inp-worker').value || null;
+    const subWorker  = document.getElementById('inp-subworker').value || null;
     const startMonth = parseInt(document.getElementById('inp-startMonth').value);
     const totalEp    = parseInt(document.getElementById('inp-totalEp').value);
     const epDays     = parseInt(document.getElementById('inp-epDays').value) || 5;
@@ -2195,7 +2212,7 @@ async function saveWork() {
       }
 
       const upd = await supabase.from('works').update({
-        title, worker, start_month: startMonth, total_ep: totalEp, ep_days: epDays, pre_phase: prePhase,
+        title, worker, sub_worker: subWorker, start_month: startMonth, total_ep: totalEp, ep_days: epDays, pre_phase: prePhase,
       }).eq('id', w.id);
       if (dbErr('작품 수정', upd.error)) return;
 
@@ -2206,7 +2223,7 @@ async function saveWork() {
     } else {
       // 새 작품 — 트리거가 자동으로 회차 생성
       const ins = await supabase.from('works').insert({
-        title, worker, start_month: startMonth, total_ep: totalEp, ep_days: epDays, pre_phase: prePhase,
+        title, worker, sub_worker: subWorker, start_month: startMonth, total_ep: totalEp, ep_days: epDays, pre_phase: prePhase,
       });
       if (dbErr('작품 추가', ins.error)) return;
     }

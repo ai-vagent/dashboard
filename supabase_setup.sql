@@ -39,6 +39,7 @@ create table works (
   id          serial primary key,
   title       text  not null,
   worker      text  references workers(id) on delete set null,  -- null = 담당자 미정
+  sub_worker  text  references workers(id) on delete set null,  -- null = 서브 작업자 미정
   start_month int   not null,
   total_ep    int   not null default 12,
   pre_phase   int   not null default 0,                          -- 0:작품선정 1:아트스타일 2:주요인물 3:연재중
@@ -49,6 +50,7 @@ create table works (
 
 create index works_pre_phase_idx on works (pre_phase);
 create index works_worker_idx    on works (worker);
+create index works_sub_worker_idx on works (sub_worker);
 
 -- ============================================================
 -- 3) episodes 테이블 (회차)
