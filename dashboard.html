@@ -221,7 +221,7 @@
   .tl-bg-cell.week-start{border-left:1px solid var(--border);}
   .tl-bg-cell.cur-day{background:rgba(108,99,255,.06);}
   .tl-today{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);z-index:1;pointer-events:none;opacity:.6;}
-  .tl-bar{position:absolute;border-radius:6px;padding:5px 8px;cursor:pointer;overflow:hidden;z-index:2;color:#fff;display:flex;flex-direction:column;justify-content:center;}
+  .tl-bar{position:absolute;border-radius:6px;padding:5px 8px;cursor:pointer;overflow:hidden;z-index:2;color:#fff;display:flex;flex-direction:column;justify-content:center;box-shadow:0 0 0 1.5px var(--surface);}
   .tl-bar:hover{filter:brightness(1.2);}
   .tl-bar-ep{font-size:11px;font-weight:700;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .tl-bar-stage{font-size:9px;line-height:1.1;margin-top:2px;opacity:.92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -231,10 +231,6 @@
   .tl-confirm-bar:hover{filter:brightness(1.15);}
   .tl-adapt-bar{position:absolute;background:#1a3a5c;border:1px solid #7ec8e3;color:#7ec8e3;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:2;display:flex;align-items:center;}
   .tl-adapt-bar:hover{filter:brightness(1.15);}
-  .tl-section-row{display:flex;background:var(--surface2);border-bottom:1px solid var(--border);}
-  .tl-section-label{position:sticky;left:0;width:160px;flex-shrink:0;padding:6px 12px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text2);background:var(--surface2);border-right:1px solid var(--border);z-index:3;}
-  .tl-section-fill{flex-shrink:0;background:var(--surface2);}
-
   /* ── 타임라인 툴바 (주간/월간 전환 + 월 이동) ── */
   .tl-toolbar{display:flex;align-items:center;gap:14px;margin-bottom:12px;flex-wrap:wrap;}
   .tl-mode-toggle{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:2px;}
@@ -1877,7 +1873,6 @@ function renderWeeklyTimeline(autoScroll = true) {
 
   const confirmItems = getConfirmItems();
   const showConfirm  = cw === 'all' || isSup(cw);
-  const sups         = state.workers.filter(w => w.isSup);
 
   const COL_W      = state.tlColW || 26;
   const ROW_H      = 52;
@@ -1929,17 +1924,47 @@ function renderWeeklyTimeline(autoScroll = true) {
     <div class="tl-track tl-track-head" style="width:${trackW}px">${weekHd}${dayHd}</div>
   </div>`;
 
-  // ── 컨펌 필요 섹션 ──
-  if (showConfirm && sups.length > 0) {
-    html += `<div class="tl-section-row">
-      <div class="tl-section-label">컨펌 필요${confirmItems.length>0?` · ${confirmItems.length}`:''}</div>
-      <div class="tl-section-fill" style="width:${trackW}px"></div>
-    </div>`;
+  // 작품 행: 한 작품 = 한 줄(고정 높이). 일정이 겹치는 회차는 뒤 회차가 위에 얹혀 '겹쳐' 보인다.
+  const workRow = (w, subLabel) => {
+    let r = `<div class="tl-row" style="min-height:${ROW_H}px">
+      <div class="tl-side">
+        <div class="tl-row-label">${w.title}</div>
+        <div class="tl-row-sub">${subLabel}</div>
+      </div>
+      <div class="tl-track" style="width:${trackW}px;height:${ROW_H}px">
+        ${bgGrid}${todayLineHTML}`;
+    w.episodes.forEach((ep, i) => {
+      if (!ep.startDate || !ep.endDate) return;
+      const sCol = dateToCol(ep.startDate);
+      const eCol = Math.max(dateToCol(ep.endDate), sCol);
+      const left = sCol * COL_W + 2;
+      const width = Math.max(COL_W - 4, (eCol - sCol + 1) * COL_W - 4);
+      const sc   = STAGE_COLORS[ep.stage];
+      const isConfirm = isConfirmNeeded(ep);
+      const pctTxt = ep.progress > 0 ? ` ${ep.progress}%` : '';
+      r += `<div class="tl-bar${isConfirm?' is-confirm':''}"
+        style="left:${left}px;width:${width}px;top:6px;bottom:6px;background:${sc}cc;z-index:${2 + i};"
+        onclick="openEditEpisode(${w.id},${ep.ep})"
+        title="${ep.ep}화 · ${STAGES[ep.stage]}${pctTxt} · ${fmtRange(ep.startDate, ep.endDate)}">
+        <div class="tl-bar-ep">${ep.ep}화${isConfirm?' 🔔':''}</div>
+        <div class="tl-bar-stage">${STAGES[ep.stage]}${pctTxt}</div>
+        ${ep.progress > 0 ? `<div class="tl-bar-prog" style="width:${ep.progress}%"></div>` : ''}
+      </div>`;
+    });
+    return r + `</div></div>`;
+  };
 
-    const adaptItems = getAdaptItems();
+  // ── 작업자별 행: 섹션 구분 없이, 감독은 '컨펌 필요' 행과 담당 작품 행이 위아래로 나란히 ──
+  const adaptItems = getAdaptItems();
 
-    sups.forEach(sup => {
-      const isAdaptSup = sup.subrole === '각색및총괄';
+  state.workers.forEach(worker => {
+    const showSupRow = worker.isSup && showConfirm && (cw === 'all' || cw === worker.id);
+    const myWorks = sortWorks(works.filter(w => isAssignedTo(w, worker.id)));
+    if (!showSupRow && !myWorks.length) return;
+
+    // 감독: 컨펌 필요(각색및총괄은 각색 포함) 행
+    if (showSupRow) {
+      const isAdaptSup = worker.subrole === '각색및총괄';
       const supItems = [
         ...confirmItems.map(c => ({ ...c, _kind: 'confirm' })),
         ...(isAdaptSup ? adaptItems.map(c => ({ ...c, _kind: 'adapt' })) : []),
@@ -1949,8 +1974,8 @@ function renderWeeklyTimeline(autoScroll = true) {
 
       html += `<div class="tl-row" style="min-height:${supRowH}px">
         <div class="tl-side">
-          <div class="tl-row-label">${sup.name}</div>
-          <div class="tl-row-sub">${sup.subrole}</div>
+          <div class="tl-row-label">${worker.name}</div>
+          <div class="tl-row-sub">🔔 컨펌 필요${isAdaptSup ? ' · 각색' : ''}</div>
         </div>
         <div class="tl-track" style="width:${trackW}px;height:${supRowH}px">
           ${bgGrid}${todayLineHTML}`;
@@ -1970,72 +1995,18 @@ function renderWeeklyTimeline(autoScroll = true) {
           title="${tip}">${icon} ${c.workTitle} ${c.ep}화</div>`;
       });
       html += `</div></div>`;
+    }
+
+    // 담당 작품 행 (서브로 참여한 작품 포함)
+    myWorks.forEach(w => {
+      const roleTag = (w.worker !== worker.id && w.subWorker === worker.id) ? ' · 서브' : '';
+      html += workRow(w, worker.name + roleTag);
     });
-  }
+  });
 
-  // ── 작업 현황 섹션 ──
-  html += `<div class="tl-section-row">
-    <div class="tl-section-label">작업 현황</div>
-    <div class="tl-section-fill" style="width:${trackW}px"></div>
-  </div>`;
-
-  // 작업자 그룹(메인+서브) + 미정(메인 담당자 없음) 그룹
-  // 서브로 참여한 작품은 해당 작업자 그룹에도 '서브' 표기와 함께 표시된다
-  const groups = [
-    ...state.workers.map(worker => ({ label: worker.name, id: worker.id, list: works.filter(w => isAssignedTo(w, worker.id)) })),
-    { label: '미정', id: null, list: works.filter(w => !state.workers.some(wk => wk.id === w.worker)) },
-  ];
-  groups.forEach(group => {
-    const workerWorks = sortWorks(group.list);
-    if (!workerWorks.length) return;
-
-    workerWorks.forEach(w => {
-      const roleTag = (group.id && w.worker !== group.id && w.subWorker === group.id) ? ' · 서브' : '';
-      // 기간이 겹치는 회차(같은 날 마감·시작, 일정 중복 등)는 줄을 나눠 표시
-      const segs = [];
-      w.episodes.forEach(ep => {
-        if (!ep.startDate || !ep.endDate) return;
-        const sCol = dateToCol(ep.startDate);
-        const eCol = Math.max(dateToCol(ep.endDate), sCol);
-        segs.push({ ep, sCol, eCol, lane: 0 });
-      });
-      segs.sort((a, b) => a.sCol - b.sCol || a.eCol - b.eCol);
-      const lanes = [];   // 각 lane의 마지막 eCol
-      segs.forEach(sg => {
-        let placed = false;
-        for (let i = 0; i < lanes.length; i++) {
-          if (lanes[i] < sg.sCol) { sg.lane = i; lanes[i] = sg.eCol; placed = true; break; }
-        }
-        if (!placed) { sg.lane = lanes.length; lanes.push(sg.eCol); }
-      });
-      const EP_BAR_H = ROW_H - 12;
-      const rowH = Math.max(ROW_H, 6 + lanes.length * (EP_BAR_H + 6));
-
-      html += `<div class="tl-row" style="min-height:${rowH}px">
-        <div class="tl-side">
-          <div class="tl-row-label">${w.title}</div>
-          <div class="tl-row-sub">${group.label}${roleTag}</div>
-        </div>
-        <div class="tl-track" style="width:${trackW}px;height:${rowH}px">
-          ${bgGrid}${todayLineHTML}`;
-
-      segs.forEach(({ ep, sCol, eCol, lane }) => {
-        const left = sCol * COL_W + 2;
-        const width = Math.max(COL_W - 4, (eCol - sCol + 1) * COL_W - 4);
-        const sc   = STAGE_COLORS[ep.stage];
-        const isConfirm = isConfirmNeeded(ep);
-        const pctTxt = ep.progress > 0 ? ` ${ep.progress}%` : '';
-        html += `<div class="tl-bar${isConfirm?' is-confirm':''}"
-          style="left:${left}px;width:${width}px;top:${6 + lane * (EP_BAR_H + 6)}px;height:${EP_BAR_H}px;background:${sc}cc;"
-          onclick="openEditEpisode(${w.id},${ep.ep})"
-          title="${ep.ep}화 · ${STAGES[ep.stage]}${pctTxt} · ${fmtRange(ep.startDate, ep.endDate)}">
-          <div class="tl-bar-ep">${ep.ep}화${isConfirm?' 🔔':''}</div>
-          <div class="tl-bar-stage">${STAGES[ep.stage]}${pctTxt}</div>
-          ${ep.progress > 0 ? `<div class="tl-bar-prog" style="width:${ep.progress}%"></div>` : ''}
-        </div>`;
-      });
-      html += `</div></div>`;
-    });
+  // 메인 담당자 미정 작품
+  sortWorks(works.filter(w => !state.workers.some(wk => wk.id === w.worker))).forEach(w => {
+    html += workRow(w, '미정');
   });
 
   html += `</div>`;
