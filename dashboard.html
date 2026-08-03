@@ -235,6 +235,34 @@
   .tl-section-label{position:sticky;left:0;width:160px;flex-shrink:0;padding:6px 12px;font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text2);background:var(--surface2);border-right:1px solid var(--border);z-index:3;}
   .tl-section-fill{flex-shrink:0;background:var(--surface2);}
 
+  /* ── 타임라인 툴바 (주간/월간 전환 + 월 이동) ── */
+  .tl-toolbar{display:flex;align-items:center;gap:14px;margin-bottom:12px;flex-wrap:wrap;}
+  .tl-mode-toggle{display:flex;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:2px;}
+  .tl-mode-btn{background:none;border:none;color:var(--text2);font-size:12px;font-weight:600;padding:5px 16px;border-radius:6px;cursor:pointer;transition:all .15s;}
+  .tl-mode-btn.active{background:var(--accent);color:#fff;}
+  .tl-month-nav{display:flex;align-items:center;gap:4px;}
+  .tl-month-lbl{font-size:14px;font-weight:700;min-width:100px;text-align:center;}
+  .tl-today-btn{margin-left:6px;padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:11px;font-weight:600;cursor:pointer;}
+  .tl-today-btn:hover{color:var(--accent);border-color:var(--accent);}
+
+  /* ── 월간 캘린더 ── */
+  .mc-wrap{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--surface);min-width:560px;}
+  .mc-dow{display:grid;grid-template-columns:repeat(5,1fr);border-bottom:1px solid var(--border);background:var(--bg);}
+  .mc-dow div{text-align:center;font-size:11px;font-weight:600;color:var(--text2);padding:7px 0;}
+  .mc-week{position:relative;border-bottom:1px solid var(--border);}
+  .mc-week:last-child{border-bottom:none;}
+  .mc-days{display:grid;grid-template-columns:repeat(5,1fr);position:absolute;inset:0;}
+  .mc-day{border-left:1px dotted rgba(255,255,255,.09);padding:5px 7px;}
+  .mc-day:first-child{border-left:none;}
+  .mc-day.mc-out{opacity:.35;}
+  .mc-datenum{display:inline-flex;width:20px;height:20px;align-items:center;justify-content:center;border-radius:50%;font-size:11px;font-weight:600;color:var(--text2);}
+  .mc-datenum.mc-today{background:var(--accent);color:#fff;}
+  .mc-bar{position:absolute;border-radius:5px;padding:0 7px;font-size:10px;font-weight:600;color:#fff;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;z-index:2;}
+  .mc-bar:hover{filter:brightness(1.2);}
+  .mc-bar.is-confirm{outline:1.5px solid var(--orange);outline-offset:-1px;}
+  .mc-bar.mc-cont-l{border-top-left-radius:0;border-bottom-left-radius:0;}
+  .mc-bar.mc-cont-r{border-top-right-radius:0;border-bottom-right-radius:0;}
+
   /* ── Modal ── */
   .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center;}
   .modal-overlay.open{display:flex;}
@@ -442,6 +470,18 @@
 
     <div id="view-works"></div>
     <div id="view-timeline" style="display:none">
+      <div class="tl-toolbar">
+        <div class="tl-mode-toggle">
+          <button class="tl-mode-btn active" id="tl-mode-week"  onclick="setTlMode('week')">주간</button>
+          <button class="tl-mode-btn"        id="tl-mode-month" onclick="setTlMode('month')">월간</button>
+        </div>
+        <div class="tl-month-nav" id="tl-month-nav" style="display:none">
+          <button class="cal-arrow" onclick="tlMonthMove(-1)">‹</button>
+          <span class="tl-month-lbl" id="tl-month-lbl"></span>
+          <button class="cal-arrow" onclick="tlMonthMove(1)">›</button>
+          <button class="tl-today-btn" onclick="tlMonthToday()">오늘</button>
+        </div>
+      </div>
       <div class="tl-scroll" id="tl-scroll">
         <div id="timeline-container"></div>
       </div>
@@ -754,6 +794,8 @@ let state = {
   editingEpKey: null,
   epPage: {},          // workId → 현재 회차 페이지 (0-based)
   adminSubTab: 'schedule',  // 관리자 보드 서브탭: 'schedule'(작업자·제작일정) | 'works'(작품)
+  tlMode: 'week',      // 타임라인 보기: 'week'(주간 간트) | 'month'(월간 캘린더)
+  tlMonth: null,       // 월간 캘린더에서 보고 있는 달 {y, m} — null이면 오늘 기준
 };
 
 const EP_PAGE_SIZE = 10;   // 카드당 표시할 최대 회차 수
@@ -1428,9 +1470,11 @@ function workerWorkdayStatsHTML() {
 function renderAdminView() {
   const works = state.works;
   const totalWorks  = works.length;
-  const onAirList   = works.filter(w => w.prePhase === 3 && !w.episodes.every(e => e.stage === 6));
+  const hasWorker   = w => state.workers.some(x => x.id === w.worker);
+  // 연재중: 담당자 미정 작품은 제외 (미정 작품은 아래 '담당자 미정' 섹션에서 표시)
+  const onAirList   = works.filter(w => w.prePhase === 3 && !w.episodes.every(e => e.stage === 6) && hasWorker(w));
   const waitingList = works.filter(w => w.prePhase < 3);
-  const noWorkerList= works.filter(w => !state.workers.some(x => x.id === w.worker));
+  const noWorkerList= works.filter(w => !hasWorker(w));
   const completedList = works.filter(w => w.prePhase === 3 && w.episodes.length > 0 && w.episodes.every(e => e.stage === 6));
 
   // 전체 회차 진행률
@@ -1654,6 +1698,144 @@ function scrollToAdminSection(key) {
 }
 
 function renderTimelineView() {
+  const isMonth = state.tlMode === 'month';
+  document.getElementById('tl-mode-week').classList.toggle('active', !isMonth);
+  document.getElementById('tl-mode-month').classList.toggle('active', isMonth);
+  document.getElementById('tl-month-nav').style.display = isMonth ? 'flex' : 'none';
+  if (isMonth) renderMonthlyView();
+  else renderWeeklyTimeline();
+}
+
+function setTlMode(mode) {
+  state.tlMode = mode;
+  renderTimelineView();
+}
+
+// ── 월간 캘린더 ──────────────────────────────────────────────
+// 프로젝트 기간(2026-05 ~ 2027-01) 안에서만 이동
+const TL_MONTH_MIN = 2026 * 12 + 4;   // 2026년 5월 (0-based m=4)
+const TL_MONTH_MAX = 2027 * 12 + 0;   // 2027년 1월
+
+function tlMonthIdx() {
+  if (!state.tlMonth) {
+    const t = new Date();
+    state.tlMonth = { y: t.getFullYear(), m: t.getMonth() };
+  }
+  const idx = state.tlMonth.y * 12 + state.tlMonth.m;
+  return Math.max(TL_MONTH_MIN, Math.min(TL_MONTH_MAX, idx));
+}
+
+function tlMonthMove(delta) {
+  const idx = Math.max(TL_MONTH_MIN, Math.min(TL_MONTH_MAX, tlMonthIdx() + delta));
+  state.tlMonth = { y: Math.floor(idx / 12), m: idx % 12 };
+  renderTimelineView();
+}
+
+function tlMonthToday() {
+  const t = new Date();
+  state.tlMonth = { y: t.getFullYear(), m: t.getMonth() };
+  renderTimelineView();
+}
+
+function renderMonthlyView() {
+  const idx = tlMonthIdx();
+  const year = Math.floor(idx / 12), month = idx % 12;
+  state.tlMonth = { y: year, m: month };
+  document.getElementById('tl-month-lbl').textContent = `${year}년 ${month + 1}월`;
+
+  const cw = state.currentWorker;
+  const works = (cw === 'all') ? state.works : state.works.filter(x => x.worker === cw);
+  const todayStr = fmtDate(new Date());
+
+  const BAR_H = 20, BAR_GAP = 4, DATE_H = 28;
+  const DAYS = ['월', '화', '수', '목', '금'];
+
+  const first = new Date(year, month, 1);
+  const last  = new Date(year, month + 1, 0);
+  // 1일이 속한 주의 월요일부터 시작 (일요일이면 다음날인 월요일)
+  const monday = new Date(first);
+  const fdow = first.getDay();
+  monday.setDate(first.getDate() - (fdow === 0 ? -1 : fdow - 1));
+
+  let html = `<div class="mc-wrap">
+    <div class="mc-dow">${DAYS.map(d => `<div>${d}</div>`).join('')}</div>`;
+
+  while (monday <= last) {
+    const weekDays = [];
+    for (let d = 0; d < 5; d++) {
+      const day = new Date(monday);
+      day.setDate(monday.getDate() + d);
+      weekDays.push(day);
+    }
+    const weekStart = fmtDate(weekDays[0]);
+    const weekEnd   = fmtDate(weekDays[4]);
+
+    // 이번 주와 겹치는 회차 → 주 안에서 세그먼트로 자르고 레인 배치
+    const segs = [];
+    works.forEach(w => {
+      const worker = state.workers.find(x => x.id === w.worker);
+      w.episodes.forEach(ep => {
+        if (!ep.startDate || !ep.endDate) return;
+        if (ep.endDate < weekStart || ep.startDate > weekEnd) return;
+        const s = ep.startDate > weekStart ? ep.startDate : weekStart;
+        const e = ep.endDate   < weekEnd   ? ep.endDate   : weekEnd;
+        const sCol = weekDays.findIndex(d => fmtDate(d) >= s);
+        let eCol = 4;
+        for (let i = 4; i >= 0; i--) { if (fmtDate(weekDays[i]) <= e) { eCol = i; break; } }
+        if (sCol < 0 || eCol < sCol) return;
+        segs.push({
+          work: w, ep, sCol, eCol,
+          contL: ep.startDate < weekStart,   // 지난주에서 이어짐
+          contR: ep.endDate   > weekEnd,     // 다음주로 이어짐
+          workerName: worker ? worker.name : '미정',
+        });
+      });
+    });
+
+    // 겹치지 않게 레인 배치 (시작 컬럼 순)
+    segs.sort((a, b) => a.sCol - b.sCol || a.eCol - b.eCol);
+    const lanes = [];   // 각 lane의 마지막 eCol
+    segs.forEach(sg => {
+      let placed = false;
+      for (let i = 0; i < lanes.length; i++) {
+        if (lanes[i] < sg.sCol) { sg.lane = i; lanes[i] = sg.eCol; placed = true; break; }
+      }
+      if (!placed) { sg.lane = lanes.length; lanes.push(sg.eCol); }
+    });
+
+    const rowH = Math.max(76, DATE_H + lanes.length * (BAR_H + BAR_GAP) + 8);
+    html += `<div class="mc-week" style="min-height:${rowH}px">
+      <div class="mc-days">${weekDays.map(day => {
+        const out = day.getMonth() !== month;
+        const isToday = fmtDate(day) === todayStr;
+        return `<div class="mc-day${out ? ' mc-out' : ''}"><span class="mc-datenum${isToday ? ' mc-today' : ''}">${day.getDate()}</span></div>`;
+      }).join('')}</div>`;
+
+    segs.forEach(sg => {
+      const { work: w, ep } = sg;
+      const left  = `calc(${sg.sCol} / 5 * 100% + ${sg.contL ? 0 : 2}px)`;
+      const width = `calc(${sg.eCol - sg.sCol + 1} / 5 * 100% - ${(sg.contL ? 0 : 2) + (sg.contR ? 0 : 2)}px)`;
+      const top   = DATE_H + sg.lane * (BAR_H + BAR_GAP);
+      const isConfirm = isConfirmNeeded(ep);
+      const pctTxt = ep.progress > 0 ? ` ${ep.progress}%` : '';
+      const contCls = (sg.contL ? ' mc-cont-l' : '') + (sg.contR ? ' mc-cont-r' : '');
+      html += `<div class="mc-bar${isConfirm ? ' is-confirm' : ''}${contCls}"
+        style="left:${left};width:${width};top:${top}px;height:${BAR_H}px;background:${STAGE_COLORS[ep.stage]}cc;"
+        onclick="openEditEpisode(${w.id},${ep.ep})"
+        title="${w.title} ${ep.ep}화 · ${STAGES[ep.stage]}${pctTxt} · ${fmtRange(ep.startDate, ep.endDate)} · ${sg.workerName}">${w.title} ${ep.ep}화${isConfirm ? ' 🔔' : ''}</div>`;
+    });
+
+    html += `</div>`;
+    monday.setDate(monday.getDate() + 7);
+  }
+
+  html += `</div>`;
+  document.getElementById('timeline-container').innerHTML = html;
+  document.getElementById('tl-scroll').scrollLeft = 0;
+}
+
+// ── 주간 타임라인 (캘린더 위에 간트 막대) ───────────────────────
+function renderWeeklyTimeline() {
   const cw = state.currentWorker;
   const works = (cw === 'all') ? state.works : state.works.filter(x => x.worker === cw);
 
