@@ -211,7 +211,9 @@
   .tl-row-head .tl-side{background:var(--bg);}
   .tl-row-label{font-weight:600;font-size:12px;}
   .tl-row-sub{font-size:10px;color:var(--text2);margin-top:2px;}
-  .tl-track{position:relative;flex-shrink:0;background:var(--surface);}
+  /* z-index:1 — 트랙이 자체 스택 컨텍스트를 만들어, 안의 회차 막대(z-index 2+n)가
+     왼쪽 고정 컬럼(.tl-side, z-index:3)이나 헤더 위로 튀어나오지 못하게 한다 */
+  .tl-track{position:relative;flex-shrink:0;background:var(--surface);z-index:1;}
   .tl-track-head{height:42px;background:var(--bg);}
   .tl-week-hd{position:absolute;top:0;height:21px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:var(--text2);border-left:1px solid var(--border);}
   .tl-week-hd.cur{color:var(--accent);background:rgba(108,99,255,.08);}
