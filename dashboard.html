@@ -226,6 +226,10 @@
   .tl-bar{position:absolute;border-radius:6px;padding:5px 8px;cursor:grab;overflow:hidden;z-index:2;color:#fff;display:flex;flex-direction:column;justify-content:center;box-shadow:0 0 0 1.5px var(--surface);user-select:none;touch-action:none;}
   .tl-bar:hover{filter:brightness(1.2);}
   .tl-bar:active{cursor:grabbing;}
+  /* 이번 주에 안 걸린 회차: 블록 대신 얇은 고스트 바 */
+  .tl-bar-ghost{border:1px solid;box-shadow:none;opacity:.6;padding:0 6px;justify-content:center;border-radius:4px;}
+  .tl-bar-ghost:hover{opacity:1;filter:none;}
+  .tl-bar-ghost .tl-bar-ep{font-size:9px;font-weight:600;}
   .tl-bar-h{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize;z-index:1;}
   .tl-bar-h-l{left:0;}
   .tl-bar-h-r{right:0;}
@@ -1755,6 +1759,14 @@ function renderTimelineView(autoScroll = true) {
     <div class="tl-track tl-track-head" style="width:${trackW}px">${weekHd}${dayHd}</div>
   </div>`;
 
+  // 이번 주(월~금)와 겹치는 회차만 블록으로 강조, 나머지는 얇은 고스트 바로 표시
+  const wkMon = new Date(WEEK_ORIGIN);
+  wkMon.setDate(wkMon.getDate() + curWeekI * 7);
+  const wkFri = new Date(wkMon);
+  wkFri.setDate(wkMon.getDate() + 4);
+  const weekS = fmtDate(wkMon), weekE = fmtDate(wkFri);
+  const inThisWeek = ep => ep.startDate <= weekE && ep.endDate >= weekS;
+
   // 작품 행: 한 작품 = 한 줄(고정 높이). 일정이 겹치는 회차는 뒤 회차가 위에 얹혀 '겹쳐' 보인다.
   const workRow = (w, subLabel) => {
     let r = `<div class="tl-row" style="min-height:${ROW_H}px">
@@ -1770,20 +1782,36 @@ function renderTimelineView(autoScroll = true) {
       const eCol = Math.max(dateToCol(ep.endDate), sCol);
       const left = sCol * COL_W + 2;
       const width = Math.max(COL_W - 4, (eCol - sCol + 1) * COL_W - 4);
-      // 불투명 배경 — 반투명이면 겹친 아래 막대 색이 비쳐 끝지점이 왜곡돼 보인다.
-      // 미시작(stage 0)은 기본색(#555)이 배경에 묻혀 밝은 톤으로 대체.
+      // 미시작(stage 0)은 기본색(#555)이 배경에 묻혀 밝은 톤으로 대체
       const sc   = ep.stage === 0 ? '#3f455e' : STAGE_COLORS[ep.stage];
       const isConfirm = isConfirmNeeded(ep);
       const pctTxt = ep.progress > 0 ? ` ${ep.progress}%` : '';
-      r += `<div class="tl-bar${isConfirm?' is-confirm':''}"
-        data-w="${w.id}" data-ep="${ep.ep}" data-scol="${sCol}" data-ecol="${eCol}"
-        style="left:${left}px;width:${width}px;top:6px;bottom:6px;background:${sc};z-index:${2 + i};"
-        title="${ep.ep}화 · ${STAGES[ep.stage]}${pctTxt} · ${fmtRange(ep.startDate, ep.endDate)}">
-        <div class="tl-bar-h tl-bar-h-l"></div><div class="tl-bar-h tl-bar-h-r"></div>
-        <div class="tl-bar-ep">${ep.ep}화${isConfirm?' 🔔':''}</div>
-        <div class="tl-bar-stage">${STAGES[ep.stage]}${pctTxt}</div>
-        ${ep.progress > 0 ? `<div class="tl-bar-prog" style="width:${ep.progress}%"></div>` : ''}
-      </div>`;
+      const tip = `${ep.ep}화 · ${STAGES[ep.stage]}${pctTxt} · ${fmtRange(ep.startDate, ep.endDate)}`;
+      const dataAttrs = `data-w="${w.id}" data-ep="${ep.ep}" data-scol="${sCol}" data-ecol="${eCol}"`;
+      const handles = `<div class="tl-bar-h tl-bar-h-l"></div><div class="tl-bar-h tl-bar-h-r"></div>`;
+
+      if (inThisWeek(ep)) {
+        // 이번 주에 걸린(진행 중인) 회차: 블록 강조.
+        // 배경 85% 투명도 — 겹친 회차가 살짝 비쳐 중첩을 알아볼 수 있게. 항상 고스트보다 위(z 20+).
+        r += `<div class="tl-bar${isConfirm?' is-confirm':''}"
+          ${dataAttrs}
+          style="left:${left}px;width:${width}px;top:6px;bottom:6px;background:${sc}d9;z-index:${20 + i};"
+          title="${tip}">
+          ${handles}
+          <div class="tl-bar-ep">${ep.ep}화${isConfirm?' 🔔':''}</div>
+          <div class="tl-bar-stage">${STAGES[ep.stage]}${pctTxt}</div>
+          ${ep.progress > 0 ? `<div class="tl-bar-prog" style="width:${ep.progress}%"></div>` : ''}
+        </div>`;
+      } else {
+        // 그 외 회차(지난·예정): 블록화하지 않고 얇은 고스트 바
+        r += `<div class="tl-bar tl-bar-ghost${isConfirm?' is-confirm':''}"
+          ${dataAttrs}
+          style="left:${left}px;width:${width}px;top:15px;bottom:15px;border-color:${sc};color:${sc};background:${sc}1f;z-index:${2 + i};"
+          title="${tip}">
+          ${handles}
+          <div class="tl-bar-ep">${ep.ep}화</div>
+        </div>`;
+      }
     });
     return r + `</div></div>`;
   };
