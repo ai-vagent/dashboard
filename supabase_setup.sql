@@ -63,7 +63,7 @@ create table episodes (
   end_date              date not null,
   original_start_date   date not null,                  -- 일정 지연 측정 기준
   original_end_date     date not null,
-  stage                 int  not null default 0,        -- 0:미시작 1:각색완료 2:이미지추출 3:영상초안 4:피드백 5:마무리 6:완료
+  stage                 int  not null default 0,        -- 0:미시작 1:각색완료 2:이미지추출 3:영상초안 4:피드백 5:마무리 6:완료 7:보류(제작중단·이후 회차 일정 잠김)
   progress              int  not null default 0,
   memo                  text not null default '',
   ack_kind              text,                           -- 'confirm' | 'adapt' | null
@@ -215,6 +215,9 @@ select setval('works_id_seq', 6);
 -- 10) 편의 뷰 (선택) — 컨펌 / 각색 / 지연 항목
 -- ============================================================
 
+-- 보류(stage 7) 회차부터 이후 모든 회차는 '잠김(blocked)' — 알림·지연 집계에서 제외
+-- (아래 세 뷰 공통 조건: 같은 작품에 자기보다 앞선(또는 같은) 보류 회차가 없어야 함)
+
 -- 컨펌 필요: 영상초안(3) / 피드백(4) / 마무리(5) 단계에서 progress=100
 create or replace view v_confirm_items as
   select
@@ -223,9 +226,13 @@ create or replace view v_confirm_items as
     case e.stage when 3 then '초안 확인' when 4 then '피드백 확인' else '최종 확인' end as confirm_label
   from episodes e
   join works w on w.id = e.work_id
-  where e.stage in (3,4,5) and e.progress = 100;
+  where e.stage in (3,4,5) and e.progress = 100
+    and not exists (
+      select 1 from episodes h
+      where h.work_id = e.work_id and h.stage = 7 and h.ep_num <= e.ep_num
+    );
 
--- 각색 필요: 미시작(0) 회차 중 직전 회차가 피드백(4) 이상
+-- 각색 필요: 미시작(0) 회차 중 직전 회차가 피드백(4) 이상 (보류 7 제외)
 create or replace view v_adapt_items as
   select
     e.id, e.work_id, w.title as work_title, w.worker,
@@ -236,7 +243,12 @@ create or replace view v_adapt_items as
     and e.ep_num > 1
     and exists (
       select 1 from episodes p
-      where p.work_id = e.work_id and p.ep_num = e.ep_num - 1 and p.stage >= 4
+      where p.work_id = e.work_id and p.ep_num = e.ep_num - 1
+        and p.stage >= 4 and p.stage <> 7
+    )
+    and not exists (
+      select 1 from episodes h
+      where h.work_id = e.work_id and h.stage = 7 and h.ep_num <= e.ep_num
     );
 
 -- 일정 지연: 원본 종료일 대비 현재 종료일이 늦어진 회차
@@ -247,4 +259,8 @@ create or replace view v_delayed_items as
     (e.end_date - e.original_end_date) as delay_calendar_days
   from episodes e
   join works w on w.id = e.work_id
-  where e.end_date > e.original_end_date;
+  where e.end_date > e.original_end_date
+    and not exists (
+      select 1 from episodes h
+      where h.work_id = e.work_id and h.stage = 7 and h.ep_num <= e.ep_num
+    );

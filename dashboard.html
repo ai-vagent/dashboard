@@ -88,6 +88,9 @@
   .ep-table tr:hover td{background:var(--surface2);}
   .ep-table tr.this-week td{background:rgba(108,99,255,.1);}
   .ep-table tr.this-week td:first-child{border-left:3px solid var(--accent);}
+  /* 보류로 잠긴 회차(보류 회차 포함 이후 전부): 흐리게 + 일정 취소선 */
+  .ep-table tr.ep-blocked td{opacity:.45;}
+  .ep-table tr.ep-blocked td.ep-sched-blocked{text-decoration:line-through;cursor:default !important;}
   .ep-table td.ep-memo-cell{color:var(--text2);font-size:11px;max-width:150px;}
   .ep-memo-inner{max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .ep-memo-ph{color:var(--text2);opacity:.6;font-style:italic;}
@@ -106,6 +109,7 @@
   .s4{background:#3a1a2e;color:#ff9fb5;}
   .s5{background:#2e1a3a;color:#c084fc;}
   .s6{background:#1a3a2e;color:#43d98a;}
+  .s7{background:#2b2e3c;color:#9aa0b5;border:1px dashed #565b73;}
   .confirm-needed{background:#3a2600;color:var(--orange);border:1px solid #5a3c00;}
   .ack-badge{font-size:9px;}
   .ack-confirm{background:#1a3a2e;color:#43d98a;border:1px solid #2e6845;}
@@ -230,6 +234,13 @@
   .tl-bar-ghost{border:1px solid;box-shadow:none;opacity:.6;padding:0 6px;justify-content:center;border-radius:4px;}
   .tl-bar-ghost:hover{opacity:1;filter:none;}
   .tl-bar-ghost .tl-bar-ep{font-size:9px;font-weight:600;}
+  /* 보류로 잠긴 회차: 빗금 바 — 드래그·기간조절 불가, 클릭(상세)만 가능 */
+  .tl-bar-hold{border:1px dashed #565b73;box-shadow:none;color:#9aa0b5;
+    background:repeating-linear-gradient(45deg,rgba(125,130,150,.28) 0 5px,rgba(125,130,150,.08) 5px 10px);
+    border-radius:4px;justify-content:center;padding:0 6px;cursor:pointer;}
+  .tl-bar-hold:hover{filter:brightness(1.35);}
+  .tl-bar-hold:active{cursor:pointer;}
+  .tl-bar-hold .tl-bar-ep{font-size:9px;font-weight:600;}
   .tl-bar-h{position:absolute;top:0;bottom:0;width:7px;cursor:ew-resize;z-index:1;}
   .tl-bar-h-l{left:0;}
   .tl-bar-h-r{right:0;}
@@ -436,6 +447,7 @@
         <div class="leg"><div class="legdot" style="background:#c084fc"></div>마무리 작업중</div>
         <div class="leg"><div class="legdot" style="background:#43d98a"></div>완료 및 업로드</div>
         <div class="leg"><div class="legdot" style="background:var(--orange)"></div>컨펌 필요 (100% 완료 시)</div>
+        <div class="leg"><div class="legdot" style="background:#565b73"></div>보류 (이후 회차 일정 잠김)</div>
       </div>
     </div>
   </aside>
@@ -609,9 +621,10 @@
 
 <script>
 // ── 상수 ────────────────────────────────────────────────────
-const STAGES       = ['미시작','각색 완료','영상 추출 중','영상초안작업','피드백 수정중','마무리 작업중','완료 및 업로드'];
-const STAGE_CLS    = ['s0','s1','s2','s3','s4','s5','s6'];
-const STAGE_COLORS = ['#555','#a0a0c0','#7ec8e3','#ffd166','#ff9fb5','#c084fc','#43d98a'];
+const STAGES       = ['미시작','각색 완료','영상 추출 중','영상초안작업','피드백 수정중','마무리 작업중','완료 및 업로드','보류'];
+const STAGE_CLS    = ['s0','s1','s2','s3','s4','s5','s6','s7'];
+const STAGE_COLORS = ['#555','#a0a0c0','#7ec8e3','#ffd166','#ff9fb5','#c084fc','#43d98a','#7d8296'];
+const STAGE_HOLD   = 7; // 보류 — 작품 드랍·작업자 퇴사 등 제작 중단. 이 회차부터 이후 모든 회차 일정 잠김
 const PROG_STAGES  = [3, 4, 5]; // 영상초안작업, 피드백 수정중, 마무리 작업중 (진행률 표시)
 const CONFIRM_STAGES = [3, 4, 5]; // 이 단계에서 progress===100이면 컨펌 필요
 const STAGE_FEEDBACK = 4; // 피드백 수정중 — 다음 회차 각색 알림 트리거 기준
@@ -860,6 +873,17 @@ function wName(id)  { return state.workers.find(w=>w.id===id)?.name  ?? '미정'
 function isSup(id)  { return state.workers.find(w=>w.id===id)?.isSup ?? false; }
 function isConfirmNeeded(ep) { return CONFIRM_STAGES.includes(ep.stage) && ep.progress === 100; }
 
+// 보류: 작품 안에서 가장 앞선 '보류' 회차 번호 (없으면 null)
+function holdEpNum(work) {
+  const h = work.episodes.find(e => e.stage === STAGE_HOLD);
+  return h ? h.ep : null;
+}
+// 보류 회차부터 이후 모든 회차는 일정이 잠긴다(block) — 수정·드래그·지연집계·알림 대상에서 제외
+function isBlockedEp(work, ep) {
+  const h = holdEpNum(work);
+  return h !== null && ep.ep >= h;
+}
+
 // 메인 또는 서브 작업자로 참여 중인지
 function isAssignedTo(work, workerId) {
   return work.worker === workerId || work.subWorker === workerId;
@@ -892,7 +916,7 @@ function sortWorks(works) {
 function getConfirmItems() {
   return state.works.flatMap(w =>
     w.episodes
-      .filter(ep => isConfirmNeeded(ep))
+      .filter(ep => isConfirmNeeded(ep) && !isBlockedEp(w, ep))
       .map(ep => ({
         ...ep,
         workId: w.id,
@@ -910,8 +934,10 @@ function getAdaptItems() {
       .filter(ep => {
         if (ep.stage !== 0) return false;
         if (ep.ep === 1)    return false;
+        if (isBlockedEp(w, ep)) return false;   // 보류로 잠긴 회차는 각색 알림 제외
         const prev = w.episodes.find(e => e.ep === ep.ep - 1);
-        return prev && prev.stage >= STAGE_FEEDBACK;
+        // 보류(stage 7)는 '피드백 이상 진행'이 아니므로 각색 트리거에서 제외
+        return prev && prev.stage >= STAGE_FEEDBACK && prev.stage !== STAGE_HOLD;
       })
       .map(ep => ({
         ...ep,
@@ -929,6 +955,7 @@ function getDelayedItems() {
   state.works.forEach(w => {
     w.episodes.forEach(ep => {
       if (!ep.endDate) return;
+      if (isBlockedEp(w, ep)) return;   // 보류로 잠긴 회차는 지연 집계 제외
       // 현재 기록된 작업 종료일이 지났는데 아직 '완료(stage 6)'가 아님
       if (ep.stage !== 6 && today > ep.endDate) {
         out.push({
@@ -1016,6 +1043,10 @@ function renderSummary() {
   const done   = allEps.filter(e => e.stage===6).length;
   const inprog = allEps.filter(e => e.stage>0 && e.stage<6).length;
   const confirm = getConfirmItems().length;
+  const blocked = works.reduce((n,w) => n + w.episodes.filter(e => isBlockedEp(w,e)).length, 0);
+  const blockedCard = blocked > 0
+    ? `<div class="scard"><div class="sval" style="color:var(--text2)">⛔ ${blocked}</div><div class="slabel">보류·중단 회차</div></div>`
+    : '';
   document.getElementById('summary-bar').innerHTML = `
     <div class="scard"><div class="sval">${works.length}</div><div class="slabel">담당 작품</div></div>
     <div class="scard"><div class="sval">${allEps.length}</div><div class="slabel">총 회차</div></div>
@@ -1024,7 +1055,7 @@ function renderSummary() {
     <div class="scard" style="${confirm>0?'border-color:var(--orange);background:#3a260055':''}">
       <div class="sval" style="color:var(--orange)">${confirm>0?'🔔 ':''} ${confirm}</div>
       <div class="slabel">컨펌 필요</div>
-    </div>`;
+    </div>${blockedCard}`;
 }
 
 // ── 작품별 현황 ──────────────────────────────────────────────
@@ -1156,7 +1187,8 @@ function workCardHTML(w) {
 
   const epRows = pageEps.map(ep => {
     const sc = STAGE_COLORS[ep.stage];
-    const isThisWeek = isCurrentEp(ep);
+    const blocked = isBlockedEp(w, ep);
+    const isThisWeek = isCurrentEp(ep) && !blocked;
     const progHTML = (PROG_STAGES.includes(ep.stage) || ep.progress>0)
       ? `<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${ep.progress}%;background:${sc}"></div></div><div class="prog-txt">${ep.progress}%</div></div>`
       : '<span style="color:var(--text2);font-size:11px">–</span>';
@@ -1178,10 +1210,16 @@ function workCardHTML(w) {
     } else {
       memoCell = `<td class="ep-memo-cell"></td>`;
     }
-    return `<tr class="${isThisWeek?'this-week':''}" onclick="openEditEpisode(${w.id},${ep.ep})" style="cursor:pointer">
+    // 보류로 잠긴 회차: 일정 클릭(수정) 비활성 + 취소선, 보류 회차 이후는 '중단' 배지
+    const schedCell = blocked
+      ? `<td class="ep-sched-blocked" style="color:var(--text2);font-size:11px">${fmtRange(ep.startDate, ep.endDate)}</td>`
+      : `<td class="ep-sched" onclick="event.stopPropagation();openEditSchedule(${w.id},${ep.ep})" style="color:var(--text2);font-size:11px;cursor:pointer">${fmtRange(ep.startDate, ep.endDate)}</td>`;
+    const blockedBadge = (blocked && ep.stage !== STAGE_HOLD)
+      ? `<span class="estage s7" style="margin-left:4px">⛔ 중단</span>` : '';
+    return `<tr class="${isThisWeek?'this-week':''}${blocked?' ep-blocked':''}" onclick="openEditEpisode(${w.id},${ep.ep})" style="cursor:pointer">
       <td>${ep.ep}화${isThisWeek ? ' <span style="color:var(--accent);font-size:9px">이번 주</span>' : ''}</td>
-      <td class="ep-sched" onclick="event.stopPropagation();openEditSchedule(${w.id},${ep.ep})" style="color:var(--text2);font-size:11px;cursor:pointer">${fmtRange(ep.startDate, ep.endDate)}</td>
-      <td><span class="estage ${STAGE_CLS[ep.stage]}">${STAGES[ep.stage]}</span>${confirmBadge}${ackBadge}</td>
+      ${schedCell}
+      <td><span class="estage ${STAGE_CLS[ep.stage]}">${ep.stage===STAGE_HOLD?'⛔ ':''}${STAGES[ep.stage]}</span>${blockedBadge}${confirmBadge}${ackBadge}</td>
       <td>${progHTML}</td>
       ${memoCell}
     </tr>`;
@@ -1237,13 +1275,16 @@ function setEpPage(workId, page) {
 // ── 관리자용 보드 ────────────────────────────────────────────
 function currentEpOf(w) {
   // 작업 중인 회차 찾기 (가장 진행이 많이 된 회차의 다음 진행 단계 회차)
-  const inProg = w.episodes.find(e => e.stage > 0 && e.stage < 6);
+  // 보류로 잠긴 회차는 '현재 작업' 후보에서 제외한다.
+  const notBlocked = e => !isBlockedEp(w, e);
+  const inProg = w.episodes.find(e => e.stage > 0 && e.stage < 6 && notBlocked(e));
   if (inProg) return inProg;
   const lastDone = [...w.episodes].reverse().find(e => e.stage === 6);
   if (lastDone && lastDone.ep < w.episodes.length) {
-    return w.episodes.find(e => e.ep === lastDone.ep + 1);
+    const next = w.episodes.find(e => e.ep === lastDone.ep + 1);
+    return next && notBlocked(next) ? next : null;
   }
-  return w.episodes[0];
+  return w.episodes.find(notBlocked) ?? null;
 }
 
 function workRowHTML(w, opts={}) {
@@ -1254,7 +1295,10 @@ function workRowHTML(w, opts={}) {
   const cells = [`<div class="ab-tw-title" onclick="event.stopPropagation();">${w.title}</div>`];
   cells.push(`<div class="ab-tw-cell">${workerName}${subName ? `<span style="color:var(--text2)"> · ${subName}(서브)</span>` : ''}</div>`);
   if (opts.showCurrent) {
-    cells.push(`<div class="ab-tw-cell">${cur ? `${cur.ep}화 · ${STAGES[cur.stage]}` : '–'}</div>`);
+    const holdAt = holdEpNum(w);
+    const curTxt = cur ? `${cur.ep}화 · ${STAGES[cur.stage]}`
+                 : holdAt ? `<span style="color:var(--text2)">⛔ ${holdAt}화부터 보류</span>` : '–';
+    cells.push(`<div class="ab-tw-cell">${curTxt}</div>`);
   }
   if (opts.showSched) {
     cells.push(`<div class="ab-tw-cell">${cur ? fmtRange(cur.startDate, cur.endDate) : '–'}</div>`);
@@ -1301,6 +1345,7 @@ function productionInsights() {
   state.works.forEach(w => {
     w.episodes.forEach(ep => {
       if (ep.stage < 1) return;                    // 미시작 제외
+      if (isBlockedEp(w, ep)) return;              // 보류로 잠긴 회차 제외
       const ps = perStage[ep.stage];
       ps.count++;
       const sd = slipDays(ep);
@@ -1360,7 +1405,7 @@ function productionInsightsHTML() {
   </div>`;
 
   // 단계(프로세스)별 지연 바 차트
-  const stages = ins.perStage.filter(s => s.stage >= 1);
+  const stages = ins.perStage.filter(s => s.stage >= 1 && s.stage !== STAGE_HOLD);
   const maxDelay = Math.max(1, ...stages.map(s => s.delayDays));
   const stageRows = stages.map(s => {
     const pct = Math.round((s.delayDays / maxDelay) * 100);
@@ -1469,8 +1514,9 @@ function renderAdminView() {
   const noWorkerList= works.filter(w => !hasWorker(w));
   const completedList = works.filter(w => w.prePhase === 3 && w.episodes.length > 0 && w.episodes.every(e => e.stage === 6));
 
-  // 전체 회차 진행률
-  const allEps = works.flatMap(w => w.episodes);
+  // 전체 회차 진행률 — 보류로 잠긴 회차는 진행률 계산에서 제외하고 별도 표시
+  const blockedEps  = works.reduce((n,w) => n + w.episodes.filter(e => isBlockedEp(w,e)).length, 0);
+  const allEps      = works.flatMap(w => w.episodes.filter(e => !isBlockedEp(w,e)));
   const totalEps    = allEps.length;
   const doneEps     = allEps.filter(e => e.stage === 6).length;
   const inProgEps   = allEps.filter(e => e.stage > 0 && e.stage < 6).length;
@@ -1502,7 +1548,7 @@ function renderAdminView() {
           <div class="ab-prog-bar"><div class="ab-prog-fill" style="width:${pct}%"></div></div>
           <div class="ab-prog-meta">
             <span>${doneEps} / ${totalEps} 회차 완료</span>
-            <span>진행 중 ${inProgEps} · 미시작 ${notStarted}</span>
+            <span>진행 중 ${inProgEps} · 미시작 ${notStarted}${blockedEps > 0 ? ` · ⛔ 보류 ${blockedEps}` : ''}</span>
           </div>
         </div>
       </div>
@@ -1790,7 +1836,16 @@ function renderTimelineView(autoScroll = true) {
       const dataAttrs = `data-w="${w.id}" data-ep="${ep.ep}" data-scol="${sCol}" data-ecol="${eCol}"`;
       const handles = `<div class="tl-bar-h tl-bar-h-l"></div><div class="tl-bar-h tl-bar-h-r"></div>`;
 
-      if (inThisWeek(ep)) {
+      if (isBlockedEp(w, ep)) {
+        // 보류로 잠긴 회차: 빗금 바 — 핸들 없음(기간조절 불가), 드래그도 잠김. 클릭하면 상세(보류 해제 가능)
+        const holdLbl = ep.stage === STAGE_HOLD ? '보류' : '중단';
+        r += `<div class="tl-bar tl-bar-hold"
+          ${dataAttrs}
+          style="left:${left}px;width:${width}px;top:11px;bottom:11px;z-index:${2 + i};"
+          title="${ep.ep}화 · ${holdLbl} (일정 잠김) · ${fmtRange(ep.startDate, ep.endDate)}">
+          <div class="tl-bar-ep">⛔ ${ep.ep}화 ${holdLbl}</div>
+        </div>`;
+      } else if (inThisWeek(ep)) {
         // 이번 주에 걸린(진행 중인) 회차: 블록 강조.
         // 배경 85% 투명도 — 겹친 회차가 살짝 비쳐 중첩을 알아볼 수 있게. 항상 고스트보다 위(z 20+).
         r += `<div class="tl-bar${isConfirm?' is-confirm':''}"
@@ -1893,8 +1948,10 @@ function tlPointerDown(e) {
   if (!bar || (e.pointerType === 'mouse' && e.button !== 0)) return;
   const mode = e.target.classList.contains('tl-bar-h-l') ? 'l'
              : e.target.classList.contains('tl-bar-h-r') ? 'r' : 'move';
+  // 보류로 잠긴 회차: 드래그(이동·기간조절) 불가 — 클릭으로 상세만 열 수 있음
+  const blocked = bar.classList.contains('tl-bar-hold');
   tlDrag = {
-    el: bar, workId: +bar.dataset.w, ep: +bar.dataset.ep, mode,
+    el: bar, workId: +bar.dataset.w, ep: +bar.dataset.ep, mode, blocked,
     sCol: +bar.dataset.scol, eCol: +bar.dataset.ecol,
     startX: e.clientX,
     origLeft: parseFloat(bar.style.left), origWidth: parseFloat(bar.style.width),
@@ -1907,6 +1964,7 @@ function tlPointerDown(e) {
 function tlPointerMove(e) {
   if (!tlDrag) return;
   const d = tlDrag;
+  if (d.blocked) return;   // 보류 잠김 — 움직이지 않음 (pointerup에서 클릭으로 처리)
   const COL_W = state.tlColW || 26;
   const dx = e.clientX - d.startX;
   if (!d.moved && Math.abs(dx) < 4) return;   // 4px 미만은 클릭으로 간주
@@ -2045,6 +2103,7 @@ async function reconcileSchedule(w, { totalEp, startMonth, epDays }) {
   }
 
   const existing = new Map(w.episodes.map(e => [e.ep, e]));
+  const holdAt   = holdEpNum(w);   // 보류 시작 회차 — 이후 회차는 일정 잠김(재계산 제외)
 
   // 2) 시작 월요일에서부터 커서를 두고 1..totalEp 순서대로 날짜를 계산한다.
   const baseWk    = MONTH_FIRST_WEEK[startMonth] ?? 0;
@@ -2055,8 +2114,8 @@ async function reconcileSchedule(w, { totalEp, startMonth, epDays }) {
   for (let ep = 1; ep <= totalEp; ep++) {
     const cur = existing.get(ep);
 
-    // 이미 시작된 회차: 날짜·기록을 건드리지 않고, 커서만 그 종료일 다음 영업일로 이동
-    if (cur && cur.stage > 0) {
+    // 이미 시작된 회차 + 보류로 잠긴 회차: 날짜·기록을 건드리지 않고, 커서만 그 종료일 다음 영업일로 이동
+    if (cur && (cur.stage > 0 || (holdAt !== null && ep >= holdAt))) {
       cursor = addBusinessDays(cur.endDate, 1);
       continue;
     }
@@ -2193,6 +2252,11 @@ let calView    = { year: 2026, month: 5 };
 function openEditSchedule(workId, epNum) {
   const w  = state.works.find(x => x.id === workId);
   const ep = w.episodes.find(e => e.ep === epNum);
+  if (isBlockedEp(w, ep)) {
+    const h = holdEpNum(w);
+    alert(`${h}화가 '보류' 상태라 ${h}화부터 이후 회차의 일정이 잠겨 있습니다.\n일정을 수정하려면 먼저 ${h}화의 보류를 해제하세요.`);
+    return;
+  }
   schedDraft = { workId, epNum, startDate: ep.startDate, endDate: ep.endDate };
   const sd = parseDate(ep.startDate);
   calView = { year: sd.getFullYear(), month: sd.getMonth()+1 };
@@ -2282,6 +2346,11 @@ function pickCalDay(ds) {
 async function applyScheduleChange(workId, epNum, startDate, endDate) {
   const work = state.works.find(x=>x.id===workId);
   const ep   = work.episodes.find(e=>e.ep===epNum);
+  // 보류로 잠긴 회차는 일정 변경 불가
+  if (isBlockedEp(work, ep)) {
+    alert(`보류 상태로 일정이 잠긴 회차입니다. (${holdEpNum(work)}화부터 잠김)`);
+    return false;
+  }
   const delta = businessDaysBetween(ep.endDate, endDate);
 
   const r1 = await supabase.from('episodes')
@@ -2290,8 +2359,9 @@ async function applyScheduleChange(workId, epNum, startDate, endDate) {
   if (dbErr('일정 저장', r1.error)) return false;
 
   if (delta !== 0) {
+    // 뒤 회차 일괄 시프트 — 단, 보류로 잠긴 회차는 시프트하지 않는다
     const updates = work.episodes
-      .filter(e => e.ep > epNum)
+      .filter(e => e.ep > epNum && !isBlockedEp(work, e))
       .map(e => ({
         ep_num: e.ep,
         start_date: addBusinessDays(e.startDate, delta),
@@ -2329,10 +2399,21 @@ async function saveEpisode() {
   btn.disabled = true;
   try {
     const {workId, epNum} = state.editingEpKey;
-    const ep = state.works.find(x=>x.id===workId).episodes.find(e=>e.ep===epNum);
+    const work = state.works.find(x=>x.id===workId);
+    const ep = work.episodes.find(e=>e.ep===epNum);
     const newStage = getSelStage();
     const newProg  = PROG_STAGES.includes(newStage) ? parseInt(document.getElementById('prog-slider').value) : 0;
     const newMemo  = document.getElementById('ep-memo').value.trim();
+
+    // 보류로 전환: 이 회차부터 마지막 회차까지 일정이 잠긴다는 것을 먼저 안내
+    if (newStage === STAGE_HOLD && ep.stage !== STAGE_HOLD) {
+      const lastEp = work.episodes.length ? work.episodes[work.episodes.length-1].ep : epNum;
+      if (!confirm(
+        `${epNum}화를 '보류'로 변경합니다. (작품 드랍 · 작업자 퇴사 등 제작 중단)\n\n` +
+        `${epNum}화부터 ${lastEp}화까지 모든 회차의 일정이 잠기며(수정·드래그 불가),\n` +
+        `지연 집계와 컨펌·각색 알림에서도 제외됩니다.\n\n계속하시겠습니까?`
+      )) return;
+    }
     // 작업자가 단계를 바꾸면 컨펌/각색 완료 표식 해제
     const ackPatch = newStage !== ep.stage ? { ack_kind: null, ack_label: null } : {};
 
