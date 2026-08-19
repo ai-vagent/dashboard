@@ -103,7 +103,7 @@
   .ep-pg-info{font-size:11px;color:var(--text2);min-width:110px;text-align:center;}
   .estage{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;}
   .s0{background:#2d2f4a;color:var(--text2);}
-  .s1{background:#2a2e3a;color:#a0a0c0;}
+  .s1{background:#1a3a5c;color:#7ec8e3;border:1px solid #2e5a78;}
   .s2{background:#1a3a5c;color:#7ec8e3;}
   .s3{background:#3a2e1a;color:#ffd166;}
   .s4{background:#3a1a2e;color:#ff9fb5;}
@@ -113,7 +113,6 @@
   .confirm-needed{background:#3a2600;color:var(--orange);border:1px solid #5a3c00;}
   .ack-badge{font-size:9px;}
   .ack-confirm{background:#1a3a2e;color:#43d98a;border:1px solid #2e6845;}
-  .ack-adapt{background:#1a3a5c;color:#7ec8e3;border:1px solid #2e5a78;}
   .prog-wrap{display:flex;align-items:center;gap:5px;}
   .prog-bar{flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;min-width:50px;}
   .prog-fill{height:100%;border-radius:3px;}
@@ -1173,13 +1172,13 @@ async function confirmDone(workId, epNum) {
   await loadAll();
   render();
 }
-// 각색 완료: 미시작 → 각색 완료 (stage 1)
+// 각색 완료: 미시작 → 각색 완료 (stage 1) — 상태만 바뀌고 별도 표식은 붙이지 않는다
 async function adaptDone(workId, epNum) {
   const ep = state.works.find(w => w.id === workId).episodes.find(e => e.ep === epNum);
   if (!ep) return;
   const r = await supabase.from('episodes').update({
     stage: 1, progress: 0,
-    ack_kind: 'adapt', ack_label: '각색 완료',
+    ack_kind: null, ack_label: null,
   }).eq('work_id', workId).eq('ep_num', epNum);
   if (dbErr('각색 완료', r.error)) return;
   await loadAll();
