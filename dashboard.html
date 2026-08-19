@@ -287,6 +287,12 @@
   /* 컨펌 필요 간단 카드 (감독 뷰) */
   .cf-section{margin-bottom:18px;}
   .cf-section-title{font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.6px;margin-bottom:9px;}
+  .wk-page-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;}
+  .wk-page-name{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;}
+  .wk-page-dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex-shrink:0;}
+  .wk-page-role{font-size:11px;font-weight:600;color:var(--text2);}
+  .wk-del-btn{padding:5px 12px;font-size:12px;color:var(--text2);}
+  .wk-del-btn:hover{color:#ff6584;border-color:#ff6584;}
   .cf-section-title .cf-count{display:inline-block;background:#5a3c00;color:var(--orange);padding:1px 8px;border-radius:10px;margin-left:4px;font-size:11px;}
   .cf-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(390px,1fr));gap:14px;}
   .cf-card{display:grid;grid-template-columns:1fr auto auto auto;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--orange);border-radius:10px;padding:11px 14px;cursor:pointer;transition:background .15s;}
@@ -1064,6 +1070,17 @@ function renderWorksView() {
   const isSupView = isSup(cw);
 
   let html = '';
+
+  // 선택된 작업자 페이지: 상단에 작업자 정보 + 삭제 버튼
+  if (cw !== 'all') {
+    const wk = state.workers.find(x => x.id === cw);
+    if (wk) {
+      html += `<div class="wk-page-head">
+        <div class="wk-page-name"><span class="wk-page-dot" style="background:${wk.color}"></span>${wk.name}${wk.subrole ? ` <span class="wk-page-role">${wk.subrole}</span>` : ''}</div>
+        <button class="btn btn-s wk-del-btn" onclick="deleteWorker('${wk.id}')">🗑 작업자 삭제</button>
+      </div>`;
+    }
+  }
 
   // 감독 뷰: 컨펌 필요 카드 섹션을 상단에 표시
   if (isSupView) {
@@ -2473,6 +2490,22 @@ async function saveWorker() {
   } finally {
     btn.disabled = false;
   }
+}
+
+// ── 작업자 삭제 ───────────────────────────────────────────────
+async function deleteWorker(id) {
+  const wk = state.workers.find(x => x.id === id);
+  if (!wk) return;
+  const myWorks = state.works.filter(w => w.worker === id || w.subWorker === id);
+  const warn = myWorks.length
+    ? `\n\n담당 중인 작품 ${myWorks.length}개(${myWorks.map(w => w.title).join(', ')})의 담당은 "미정"으로 변경됩니다.`
+    : '';
+  if (!confirm(`작업자 "${wk.name}"을(를) 정말 삭제하시겠습니까?${warn}`)) return;
+  const r = await supabase.from('workers').delete().eq('id', id);
+  if (dbErr('작업자 삭제', r.error)) return;
+  state.currentWorker = 'all';
+  await loadAll();
+  render();
 }
 
 // color picker
