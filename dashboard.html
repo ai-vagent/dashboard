@@ -468,6 +468,7 @@
       <div class="fpill" onclick="setFilter(0)">작품 선정</div>
       <div class="fpill" onclick="setFilter(1)">아트스타일 픽스</div>
       <div class="fpill" onclick="setFilter(2)">주요 인물 디자인</div>
+      <div class="fpill" onclick="setFilter(4)">완주</div>
     </div>
 
     <div id="view-works"></div>
@@ -521,6 +522,7 @@
         <select class="fs" id="inp-prePhase">
           <option value="0">작품 선정</option><option value="1">아트스타일 픽스</option>
           <option value="2">주요 인물 디자인</option><option value="3">연재 진행 중</option>
+          <option value="4">완주</option>
         </select>
       </div>
       <div class="btn-row">
@@ -633,7 +635,7 @@ const STAGE_HOLD   = 7; // 보류 — 작품 드랍·작업자 퇴사 등 제작
 const PROG_STAGES  = [3, 4, 5]; // 영상초안작업, 피드백 수정중, 마무리 작업중 (진행률 표시)
 const CONFIRM_STAGES = [3, 4, 5]; // 이 단계에서 progress===100이면 컨펌 필요
 const STAGE_FEEDBACK = 4; // 피드백 수정중 — 다음 회차 각색 알림 트리거 기준
-const PRE_PHASES   = ['작품 선정','아트스타일 픽스','주요 인물 디자인','연재 진행 중'];
+const PRE_PHASES   = ['작품 선정','아트스타일 픽스','주요 인물 디자인','연재 진행 중','완주'];
 const PRE_COLORS   = ['#6c63ff','#ff6584','#43d98a','#888'];
 
 // 주간 계산
@@ -1190,8 +1192,8 @@ function workCardHTML(w) {
   const roleTxt = role ? ` · ${role}` : '';
 
   const phaseSteps = PRE_PHASES.slice(0,3).map((p,i) => {
-    const cls  = (w.prePhase===3 || i < w.prePhase) ? 'done' : i===w.prePhase ? 'active' : 'pending';
-    const icon = (w.prePhase===3 || i < w.prePhase) ? '✓' : i+1;
+    const cls  = (w.prePhase>=3 || i < w.prePhase) ? 'done' : i===w.prePhase ? 'active' : 'pending';
+    const icon = (w.prePhase>=3 || i < w.prePhase) ? '✓' : i+1;
     return `<div class="phase-step"><div class="pdot ${cls}">${icon}</div><div class="plabel">${p}</div></div>`;
   }).join('');
 
@@ -1251,7 +1253,7 @@ function workCardHTML(w) {
       </div>`
     : '';
 
-  const isPreDone = w.prePhase === 3;
+  const isPreDone = w.prePhase >= 3;
   const bodyHTML = isPreDone
     ? `<table class="ep-table">
         <thead><tr><th>회차</th><th>일정</th><th>단계</th><th>진행률</th><th>링크</th></tr></thead>
@@ -1528,6 +1530,7 @@ function renderAdminView() {
   const onAirList   = works.filter(w => w.prePhase === 3 && !w.episodes.every(e => e.stage === 6) && hasWorker(w));
   const waitingList = works.filter(w => w.prePhase < 3);
   const noWorkerList= works.filter(w => !hasWorker(w));
+  const finishedList  = works.filter(w => w.prePhase === 4);
   const completedList = works.filter(w => w.prePhase === 3 && w.episodes.length > 0 && w.episodes.every(e => e.stage === 6));
 
   // 전체 회차 진행률 — 보류로 잠긴 회차는 진행률 계산에서 제외하고 별도 표시
@@ -1553,6 +1556,7 @@ function renderAdminView() {
           <div class="ab-stat ab-stat-clickable" onclick="scrollToAdminSection('onair')"><div class="ab-stat-val green">${onAirList.length}</div><div class="ab-stat-lbl">연재중</div></div>
           <div class="ab-stat ab-stat-clickable" onclick="scrollToAdminSection('waiting')"><div class="ab-stat-val yellow">${waitingList.length}</div><div class="ab-stat-lbl">대기중 (전처리)</div></div>
           <div class="ab-stat ab-stat-clickable" onclick="scrollToAdminSection('completed')"><div class="ab-stat-val">${completedList.length}</div><div class="ab-stat-lbl">완료</div></div>
+          <div class="ab-stat ab-stat-clickable" onclick="scrollToAdminSection('finished')"><div class="ab-stat-val">${finishedList.length}</div><div class="ab-stat-lbl">완주</div></div>
           <div class="ab-stat ab-stat-clickable" onclick="scrollToAdminSection('noworker')"><div class="ab-stat-val gray">${noWorkerList.length}</div><div class="ab-stat-lbl">담당자 미정</div></div>
         </div>
       </div>
@@ -1579,8 +1583,13 @@ function renderAdminView() {
     <div id="ab-sec-completed" class="ab-section-title">✅ 완료 <span style="color:var(--text2)">· ${completedList.length}</span></div>
     ${workTableHTML(completedList, ['작품','담당자','진행도'], {showProgress:true})}
 
-    <div id="ab-sec-noworker" class="ab-section-title">👤 담당자 미정 <span style="color:var(--text2)">· ${noWorkerList.length}</span></div>
-    ${workTableHTML(noWorkerList, ['작품','담당자','전처리 단계'], {showPhase:true})}
+    <div id="ab-sec-finished" class="ab-section-title">🏁 완주 <span style="color:var(--text2)">· ${finishedList.length}</span></div>
+    ${workTableHTML(finishedList, ['작품','담당자','진행도'], {showProgress:true})}
+
+    <details id="ab-sec-noworker">
+      <summary class="ab-section-title" style="cursor:pointer">👤 담당자 미정 <span style="color:var(--text2)">· ${noWorkerList.length}</span></summary>
+      ${workTableHTML(noWorkerList, ['작품','담당자','전처리 단계'], {showPhase:true})}
+    </details>
   `;
 
   // ── 작업자(제작일정) 탭: 인사이트 + 일정 지연 + 작업자별 완료 회차 작업일 ──
@@ -1748,6 +1757,7 @@ async function importBackup(event) {
 
 function scrollToAdminSection(key) {
   const el = document.getElementById('ab-sec-' + key);
+  if (el && el.tagName === 'DETAILS') el.open = true;
   if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
