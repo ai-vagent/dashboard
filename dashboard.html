@@ -1110,16 +1110,24 @@ function renderWorksView() {
   const isAllView = cw === 'all';
 
   if (isAllView) {
-    // 전체 보기: 담당자 있는 작품 / 담당자 미정 작품을 분리해서 표시
-    const assigned   = works.filter(w => state.workers.some(x => x.id === w.worker));
-    const unassigned = works.filter(w => !state.workers.some(x => x.id === w.worker));
-
-    if (assigned.length > 0) {
-      html += `<div class="works-grid">${assigned.map(workCardHTML).join('')}</div>`;
-    }
+    // 전체 보기: 연재 진행 중 / 작품 선정(전처리) / 완주 / 담당자 미정(접힘)으로 분리해서 표시
+    const hasWorker  = w => state.workers.some(x => x.id === w.worker);
+    const assigned   = works.filter(hasWorker);
+    const unassigned = works.filter(w => !hasWorker(w));
+    const sections = [
+      ['📺 연재 진행 중',        assigned.filter(w => w.prePhase === 3)],
+      ['⏳ 작품 선정 (전처리)',  assigned.filter(w => w.prePhase < 3)],
+      ['🏁 완주',                assigned.filter(w => w.prePhase === 4)],
+    ];
+    const secTitle = (label, n) => `${label} <span style="color:var(--text2);font-weight:500">· ${n}</span>`;
+    sections.forEach(([label, list], i) => {
+      if (list.length === 0) return;
+      html += `<div class="cf-section-title" style="color:var(--text);margin-top:${i === 0 ? 6 : 18}px">${secTitle(label, list.length)}</div>`;
+      html += `<div class="works-grid">${list.map(workCardHTML).join('')}</div>`;
+    });
     if (unassigned.length > 0) {
-      html += `<div class="cf-section-title" style="color:var(--text);margin-top:18px">👤 담당자 미정 <span style="color:var(--text2);font-weight:500">· ${unassigned.length}</span></div>`;
-      html += `<div class="works-grid">${unassigned.map(workCardHTML).join('')}</div>`;
+      html += `<details style="margin-top:18px"><summary class="cf-section-title" style="color:var(--text);cursor:pointer">${secTitle('👤 담당자 미정', unassigned.length)}</summary>`;
+      html += `<div class="works-grid">${unassigned.map(workCardHTML).join('')}</div></details>`;
     }
   } else if (works.length > 0) {
     if (isSupView) html += `<div class="cf-section-title" style="color:var(--text);margin-top:6px">담당 작품</div>`;
