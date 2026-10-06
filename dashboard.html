@@ -556,10 +556,14 @@
       <div class="fg"><label class="fl">링크</label><input class="fi" id="ep-memo" placeholder="특이사항 등"></div>
       <div class="fg" id="pub-group" style="display:none">
         <label class="fl">공개 여부</label>
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-          <input type="checkbox" id="ep-published" style="accent-color:#43d98a">
-          공개됨 <span id="pub-week-info" style="color:#ff5c5c;font-size:11px"></span>
-        </label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;flex-shrink:0">
+            <input type="checkbox" id="ep-published" style="accent-color:#43d98a" onchange="togglePubWeekInput()">
+            공개됨
+          </label>
+          <input class="fi" id="ep-pub-week" placeholder="예: 9월2주" style="display:none;width:110px;padding:6px 8px;font-size:12px">
+          <span id="pub-week-suffix" style="display:none;color:#ff5c5c;font-size:11px;flex-shrink:0">보고</span>
+        </div>
       </div>
       <div class="btn-row">
         <button class="btn btn-s" onclick="closeModal('modal-ep')">취소</button>
@@ -2282,10 +2286,18 @@ function openEditEpisode(workId, epNum) {
   updateMemoPlaceholder(ep.stage);
   document.getElementById('pub-group').style.display = ep.stage === 6 ? 'block' : 'none';
   document.getElementById('ep-published').checked = !!ep.publishedWeek;
-  document.getElementById('pub-week-info').textContent = ep.publishedWeek
-    ? `(${ep.publishedWeek} 보고)`
-    : `(체크 시 '${monthWeekLabel()} 보고'로 기록)`;
+  document.getElementById('ep-pub-week').value = ep.publishedWeek || monthWeekLabel();
+  togglePubWeekInput();
   document.getElementById('modal-ep').classList.add('open');
+}
+
+// 공개 체크 여부에 따라 보고 주차 입력란 표시/숨김 (체크 시 비어 있으면 현재 주차로 채움)
+function togglePubWeekInput() {
+  const on  = document.getElementById('ep-published').checked;
+  const inp = document.getElementById('ep-pub-week');
+  if (on && !inp.value.trim()) inp.value = monthWeekLabel();
+  inp.style.display = on ? 'block' : 'none';
+  document.getElementById('pub-week-suffix').style.display = on ? 'inline' : 'none';
 }
 
 // '완료 및 업로드'(stage 6) 회차는 메모 란에 링크 입력을 안내
@@ -2478,10 +2490,11 @@ async function saveEpisode() {
     // 작업자가 단계를 바꾸면 컨펌/각색 완료 표식 해제
     const ackPatch = newStage !== ep.stage ? { ack_kind: null, ack_label: null } : {};
 
-    // 공개 여부 — 완료 및 업로드(6)에서만 유효. 새로 체크하면 현재 주차로 기록,
-    // 이미 기록된 주차는 유지, 체크 해제나 단계 변경 시 해제
+    // 공개 여부 — 완료 및 업로드(6)에서만 유효. 보고 주차는 입력란 값 사용
+    // (비어 있으면 현재 주차), 체크 해제나 단계 변경 시 해제
     const pubChecked = document.getElementById('ep-published').checked;
-    const newPubWeek = (newStage === 6 && pubChecked) ? (ep.publishedWeek || monthWeekLabel()) : null;
+    const pubWeekIn  = document.getElementById('ep-pub-week').value.trim();
+    const newPubWeek = (newStage === 6 && pubChecked) ? (pubWeekIn || monthWeekLabel()) : null;
 
     const r = await supabase.from('episodes').update({
       stage: newStage, progress: newProg, memo: newMemo, published_week: newPubWeek, ...ackPatch,
