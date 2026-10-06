@@ -88,6 +88,9 @@
   .ep-table tr:hover td{background:var(--surface2);}
   .ep-table tr.this-week td{background:rgba(108,99,255,.1);}
   .ep-table tr.this-week td:first-child{border-left:3px solid var(--accent);}
+  .ep-table tr.ep-published td{background:rgba(67,217,138,.07);}
+  .ep-table tr.ep-published td:first-child{border-left:3px solid #43d98a;}
+  .pub-report{color:#ff5c5c;font-size:10px;font-weight:600;}
   /* 보류로 잠긴 회차(보류 회차 포함 이후 전부): 흐리게 + 일정 취소선 */
   .ep-table tr.ep-blocked td{opacity:.45;}
   .ep-table tr.ep-blocked td.ep-sched-blocked{text-decoration:line-through;cursor:default !important;}
@@ -551,6 +554,13 @@
         </div>
       </div>
       <div class="fg"><label class="fl">링크</label><input class="fi" id="ep-memo" placeholder="특이사항 등"></div>
+      <div class="fg" id="pub-group" style="display:none">
+        <label class="fl">공개 여부</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="ep-published" style="accent-color:#43d98a">
+          공개됨 <span id="pub-week-info" style="color:#ff5c5c;font-size:11px"></span>
+        </label>
+      </div>
       <div class="btn-row">
         <button class="btn btn-s" onclick="closeModal('modal-ep')">취소</button>
         <button class="btn btn-p" id="btn-save-ep" onclick="saveEpisode()">저장</button>
@@ -651,6 +661,12 @@ function weekLabel(idx) {
 function curWeekIdx() {
   const diff = Math.floor((new Date() - WEEK_ORIGIN) / (7*24*60*60*1000));
   return Math.max(0, Math.min(TOTAL_WEEKS-1, diff));
+}
+// 'N월M주' 라벨 — 해당 주 월요일이 그 달의 몇 번째 주인지 기준 (공개 보고 주차 기록용)
+function monthWeekLabel(d = new Date()) {
+  const m = new Date(d);
+  m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); // 이번 주 월요일
+  return `${m.getMonth()+1}월${Math.floor((m.getDate()-1)/7)+1}주`;
 }
 
 // ── 날짜 헬퍼 ────────────────────────────────────────────────
@@ -836,6 +852,7 @@ async function loadAll() {
       originalEndDate:   e.original_end_date,
       stage: e.stage, progress: e.progress, memo: e.memo || '',
       ack: e.ack_kind ? { kind: e.ack_kind, label: e.ack_label } : null,
+      publishedWeek: e.published_week || null,
     });
   });
 
@@ -1215,7 +1232,10 @@ function workCardHTML(w) {
     const sc = STAGE_COLORS[ep.stage];
     const blocked = isBlockedEp(w, ep);
     const isThisWeek = isCurrentEp(ep) && !blocked;
-    const progHTML = (PROG_STAGES.includes(ep.stage) || ep.progress>0)
+    const isPublished = ep.stage === 6 && ep.publishedWeek;
+    const progHTML = isPublished
+      ? `<span class="pub-report">${ep.publishedWeek} 보고</span>`
+      : (PROG_STAGES.includes(ep.stage) || ep.progress>0)
       ? `<div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${ep.progress}%;background:${sc}"></div></div><div class="prog-txt">${ep.progress}%</div></div>`
       : '<span style="color:var(--text2);font-size:11px">–</span>';
     const confirmBadge = isConfirmNeeded(ep)
@@ -1242,8 +1262,8 @@ function workCardHTML(w) {
       : `<td class="ep-sched" onclick="event.stopPropagation();openEditSchedule(${w.id},${ep.ep})" style="color:var(--text2);font-size:11px;cursor:pointer">${fmtRange(ep.startDate, ep.endDate)}</td>`;
     const blockedBadge = (blocked && ep.stage !== STAGE_HOLD)
       ? `<span class="estage s7" style="margin-left:4px">⛔ 중단</span>` : '';
-    return `<tr class="${isThisWeek?'this-week':''}${blocked?' ep-blocked':''}" onclick="openEditEpisode(${w.id},${ep.ep})" style="cursor:pointer">
-      <td>${ep.ep}화${isThisWeek ? ' <span style="color:var(--accent);font-size:9px">이번 주</span>' : ''}</td>
+    return `<tr class="${isPublished?'ep-published':isThisWeek?'this-week':''}${blocked?' ep-blocked':''}" onclick="openEditEpisode(${w.id},${ep.ep})" style="cursor:pointer">
+      <td>${ep.ep}화${isThisWeek ? ' <span style="color:var(--accent);font-size:9px">이번 주</span>' : ''}${isPublished ? ' <span style="color:#43d98a;font-size:9px">공개</span>' : ''}</td>
       ${schedCell}
       <td><span class="estage ${STAGE_CLS[ep.stage]}">${ep.stage===STAGE_HOLD?'⛔ ':''}${STAGES[ep.stage]}</span>${blockedBadge}${confirmBadge}${ackBadge}</td>
       <td>${progHTML}</td>
@@ -1750,6 +1770,7 @@ async function importBackup(event) {
       original_start_date: e.original_start_date, original_end_date: e.original_end_date,
       stage: e.stage, progress: e.progress, memo: e.memo || '',
       ack_kind: e.ack_kind ?? null, ack_label: e.ack_label ?? null,
+      published_week: e.published_week ?? null,
     };
   }).filter(Boolean);
 
@@ -2259,6 +2280,11 @@ function openEditEpisode(workId, epNum) {
   document.getElementById('prog-n').textContent = ep.progress + '%';
   document.getElementById('ep-memo').value = ep.memo || '';
   updateMemoPlaceholder(ep.stage);
+  document.getElementById('pub-group').style.display = ep.stage === 6 ? 'block' : 'none';
+  document.getElementById('ep-published').checked = !!ep.publishedWeek;
+  document.getElementById('pub-week-info').textContent = ep.publishedWeek
+    ? `(${ep.publishedWeek} 보고)`
+    : `(체크 시 '${monthWeekLabel()} 보고'로 기록)`;
   document.getElementById('modal-ep').classList.add('open');
 }
 
@@ -2270,6 +2296,7 @@ function updateMemoPlaceholder(stage) {
 function selStage(i) {
   document.querySelectorAll('.stbtn').forEach((b,idx)=>b.classList.toggle('sel',idx===i));
   document.getElementById('prog-group').style.display = PROG_STAGES.includes(i) ? 'block' : 'none';
+  document.getElementById('pub-group').style.display = i === 6 ? 'block' : 'none';
   updateMemoPlaceholder(i);
 }
 
@@ -2451,8 +2478,13 @@ async function saveEpisode() {
     // 작업자가 단계를 바꾸면 컨펌/각색 완료 표식 해제
     const ackPatch = newStage !== ep.stage ? { ack_kind: null, ack_label: null } : {};
 
+    // 공개 여부 — 완료 및 업로드(6)에서만 유효. 새로 체크하면 현재 주차로 기록,
+    // 이미 기록된 주차는 유지, 체크 해제나 단계 변경 시 해제
+    const pubChecked = document.getElementById('ep-published').checked;
+    const newPubWeek = (newStage === 6 && pubChecked) ? (ep.publishedWeek || monthWeekLabel()) : null;
+
     const r = await supabase.from('episodes').update({
-      stage: newStage, progress: newProg, memo: newMemo, ...ackPatch,
+      stage: newStage, progress: newProg, memo: newMemo, published_week: newPubWeek, ...ackPatch,
     }).eq('work_id', workId).eq('ep_num', epNum);
     if (dbErr('회차 저장', r.error)) return;
 
