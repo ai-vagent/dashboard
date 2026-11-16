@@ -1229,7 +1229,13 @@ function workCardHTML(w) {
   // 회차 페이지네이션: 15화 초과 시 페이지 분할
   const epTotal   = w.episodes.length;
   const pageCount = Math.max(1, Math.ceil(epTotal / EP_PAGE_SIZE));
-  const curPage   = Math.min(state.epPage[w.id] || 0, pageCount - 1);
+  // 사용자가 페이지를 직접 넘긴 적이 없으면, '이번 주'(오늘 날짜) 회차가 있는 페이지를 기본으로 보여 줌
+  let defaultPage = 0;
+  if (state.epPage[w.id] === undefined) {
+    const curIdx = w.episodes.findIndex(ep => isCurrentEp(ep) && !isBlockedEp(w, ep));
+    if (curIdx >= 0) defaultPage = Math.floor(curIdx / EP_PAGE_SIZE);
+  }
+  const curPage   = Math.min(state.epPage[w.id] ?? defaultPage, pageCount - 1);
   const pageEps   = w.episodes.slice(curPage * EP_PAGE_SIZE, (curPage + 1) * EP_PAGE_SIZE);
 
   const epRows = pageEps.map(ep => {
